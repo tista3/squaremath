@@ -41,6 +41,8 @@ export function progressKey(d: Design): string {
     p.mulDivMax,
     p.legendMode,
     p.seed,
+    // Which cells must be coloured depends on the blank background and whether it is paper-white.
+    p.blankBackground ? `blank:${d.backgroundId}:${d.palette.find((c) => c.id === d.backgroundId)?.hex ?? ''}` : '',
   ].join('|');
   // Two independent 32-bit hashes make accidental collisions practically impossible.
   return `${d.id}:${fnv1a(content)}${fnv1a(content, 0x01234567)}`;

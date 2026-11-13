@@ -47,7 +47,8 @@ function makeDesign(opts: {
     palette,
     backgroundId: palette[0].id,
     cells,
-    puzzle: { ...DEFAULT_PUZZLE, ...opts.puzzle },
+    // Generation tests cover every cell; blank-background behaviour has its own tests.
+    puzzle: { ...DEFAULT_PUZZLE, blankBackground: false, ...opts.puzzle },
     print: DEFAULT_PRINT,
     createdAt: 0,
     updatedAt: 0,
@@ -60,10 +61,15 @@ function allColorsDesign(width: number, height: number, colors: number, puzzle?:
   return makeDesign({ width, height, colors, puzzle, fill: (i) => (i < colors ? i : rng.int(0, colors - 1)) });
 }
 
+/** Generates a puzzle that must succeed; with blankBackground off every cell has an expression. */
 function solved(design: Design) {
   const res = generatePuzzle(design);
   if (!res.ok) throw new Error(`unexpected error ${JSON.stringify(res.error)}`);
-  return res;
+  const expressions = res.expressions.map((e, i) => {
+    if (!e) throw new Error(`cell ${i} has no expression`);
+    return e;
+  });
+  return { ...res, expressions };
 }
 
 function entryFor(legend: LegendEntry[], value: number, mode: PuzzleSettings['legendMode']): LegendEntry[] {
@@ -370,6 +376,65 @@ function opStats(design: Design) {
 
 const ALL: Op[] = ['add', 'sub', 'mul', 'div'];
 
+describe('blank background', () => {
+  /** 3 colours; c0 is the background. */
+  function blankDesign(bgHex: string, puzzle: Partial<PuzzleSettings> = {}): Design {
+    const d = makeDesign({ width: 10, height: 10, colors: 3, puzzle: { blankBackground: true, ...puzzle } });
+    return { ...d, palette: d.palette.map((p, i) => (i === 0 ? { ...p, hex: bgHex } : p)) };
+  }
+
+  it('gives background cells no expression and keeps every other cell correct', () => {
+    const d = blankDesign('#ffffff');
+    const res = generatePuzzle(d);
+    if (!res.ok) throw new Error('expected ok');
+    res.expressions.forEach((e, i) => {
+      if (d.cells[i] === d.backgroundId) expect(e).toBeNull();
+      else {
+        expect(e).not.toBeNull();
+        const entries = entryFor(res.legend, e!.result, d.puzzle.legendMode);
+        expect(entries.map((x) => x.colorId)).toEqual([d.cells[i]]);
+      }
+    });
+  });
+
+  it('leaves a paper-white background out of the legend', () => {
+    const res = generatePuzzle(blankDesign('#ffffff'));
+    if (!res.ok) throw new Error('expected ok');
+    expect(res.legend.map((e) => e.colorId)).toEqual(['c1', 'c2']);
+  });
+
+  it('lists a coloured background as a blank entry ("□") so the child colours the empty boxes', () => {
+    const d = blankDesign('#81d4fa');
+    const res = generatePuzzle(d);
+    if (!res.ok) throw new Error('expected ok');
+    const blank = res.legend.filter((e) => e.blank);
+    expect(blank).toEqual([{ colorId: 'c0', min: 0, max: 0, values: [], blank: true }]);
+    expect(formatLegendValues(blank[0], 'range')).toBe('□');
+    expect(formatLegendValues(blank[0], 'value')).toBe('□');
+  });
+
+  it('does not count the background against the colour limit', () => {
+    // × up to 2 gives only the answers 1, 2, 4: two puzzle colours fit only once the background is blank.
+    const tight = { ops: ['mul'] as Op[], mulDivMax: 2 };
+    const d = makeDesign({ width: 6, height: 6, colors: 4, puzzle: { ...tight, blankBackground: false } });
+    expect(generatePuzzle(d).ok).toBe(false);
+    expect(generatePuzzle({ ...d, puzzle: { ...d.puzzle, blankBackground: true } }).ok).toBe(true);
+  });
+
+  it('handles a picture that is all background', () => {
+    const base = makeDesign({ width: 4, height: 4, colors: 2, fill: () => 0, puzzle: { blankBackground: true } });
+    const d = { ...base, palette: base.palette.map((p) => ({ ...p, hex: '#ffffff' })) };
+    const res = generatePuzzle(d);
+    expect(res).toEqual({ ok: true, expressions: Array(16).fill(null), legend: [] });
+    expect(puzzleWarnings(d, res)).toEqual([]);
+  });
+
+  it('is on by default and survives clamping', () => {
+    expect(clampPuzzleSettings({ ...DEFAULT_PUZZLE }).blankBackground).toBe(true);
+    expect(clampPuzzleSettings({ ...DEFAULT_PUZZLE, blankBackground: false }).blankBackground).toBe(false);
+  });
+});
+
 describe('puzzle quality', () => {
   it('value mode mixes all ops even when addSubMax is much larger than mulDivMax', () => {
     for (const addSubMax of [100, 1000]) {
@@ -472,7 +537,7 @@ describe('puzzle quality', () => {
     const star = TEMPLATES.find((t) => t.id === 'tpl-star')!;
     for (const legendMode of ['range', 'value'] as const) {
       for (let seed = 1; seed <= 5; seed++) {
-        const d = { ...star, puzzle: { ...star.puzzle, ops: ['mul', 'div'] as Op[], mulDivMax: 10, legendMode, seed } };
+        const d = { ...star, puzzle: { ...star.puzzle, ops: ['mul', 'div'] as Op[], mulDivMax: 10, legendMode, seed, blankBackground: false } };
         for (const c of usagePerColor(d)) {
           const label = `${legendMode} seed ${seed} ${c.colorId}`;
           expect(c.top, label).toBeLessThanOrEqual(Math.ceil(c.cells / c.distinct) + 1);
@@ -486,7 +551,7 @@ describe('puzzle quality', () => {
     // × ÷ to 5 on big colours: far more cells than expressions, so every expression repeats — but about
     // equally often, not one (2×2) far more than the rest.
     for (const t of TEMPLATES) {
-      const d = { ...t, puzzle: { ...t.puzzle, ops: ['mul', 'div'] as Op[], mulDivMax: 5, legendMode: 'range' as const } };
+      const d = { ...t, puzzle: { ...t.puzzle, ops: ['mul', 'div'] as Op[], mulDivMax: 5, legendMode: 'range' as const, blankBackground: false } };
       for (const c of usagePerColor(d)) {
         expect(c.top, `${t.id} ${c.colorId}`).toBeLessThanOrEqual(Math.ceil(c.cells / c.distinct) + 3);
       }

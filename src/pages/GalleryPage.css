@@ -122,6 +122,63 @@
   flex-grow: 2;
 }
 
+/* ---- Template filters: rows of pill chips (wrap on wide screens, scroll sideways on phones) ---- */
+
+.gallery .template-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gallery .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gallery .chip {
+  position: relative; /* contains the visually-hidden count */
+  flex: none;
+  gap: 8px;
+  padding-inline: 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.gallery .chip-count {
+  min-width: 1.6em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.gallery .chip[aria-pressed='true'] .chip-count {
+  background: var(--surface);
+}
+
+.gallery .ops-chip {
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.gallery .template-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Many templates: let the browser skip layout/paint of cards far off screen. */
+.gallery .template-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 380px;
+}
+
 .gallery .empty-state {
   display: flex;
   flex-wrap: wrap;
@@ -200,6 +257,29 @@
     padding-inline: 8px;
     white-space: normal; /* very narrow phones: wrap rather than overflow the card */
     text-align: center;
+  }
+
+  .gallery .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    /* Bleed to the screen edge so it is clear the row scrolls; padding keeps focus rings visible. */
+    margin-inline: -16px; /* the .page side padding */
+    padding: 4px 16px;
+    gap: 6px;
+  }
+
+  .gallery .chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gallery .chip {
+    padding-inline: 12px;
+  }
+
+  .gallery .template-card {
+    contain-intrinsic-size: auto 300px;
   }
 
   .gallery .empty-state {

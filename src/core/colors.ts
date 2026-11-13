@@ -155,3 +155,10 @@ function deltaE2000([l1, a1, b1]: Lab, [l2, a2, b2]: Lab): number {
   const th = dHp / sh;
   return Math.sqrt(tl * tl + tc * tc + th * th + rt * tc * th);
 }
+
+/** Near-white colours that look like blank paper: empty boxes of such a background need no colouring. */
+export function isPaperColor(hex: string): boolean {
+  const norm = normalizeHex(hex);
+  if (!norm) return false;
+  return [1, 3, 5].every((i) => parseInt(norm.slice(i, i + 2), 16) >= 0xf0);
+}

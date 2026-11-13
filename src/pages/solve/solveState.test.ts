@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   UNDO_LIMIT,
   countFilled,
+  countTargets,
   emptyFills,
   initialSolveState,
   isSolved,
@@ -72,10 +73,20 @@ describe('helpers', () => {
 
   it('counts, checks and detects completion', () => {
     const filled = ['r', 'b', null, 'w'];
-    expect(countFilled(filled)).toBe(3);
+    expect(countFilled(filled, solution)).toBe(3);
     expect(wrongMask(filled, solution)).toEqual([false, true, false, false]);
     expect(isSolved(filled, solution)).toBe(false);
     expect(isSolved([...solution], solution)).toBe(true);
+  });
+
+  it('skips cells with nothing to colour (blank paper background)', () => {
+    const targets = ['r', null, 'b', null];
+    expect(countTargets(targets)).toBe(2);
+    expect(countFilled(['r', null, null, null], targets)).toBe(1);
+    expect(isSolved(['r', null, 'b', null], targets)).toBe(true);
+    // Colouring a blank paper cell is a mistake, and the picture is not finished then.
+    expect(wrongMask(['r', 'r', 'b', null], targets)).toEqual([false, true, false, false]);
+    expect(isSolved(['r', 'r', 'b', null], targets)).toBe(false);
   });
 
   it('sanitizes saved progress', () => {

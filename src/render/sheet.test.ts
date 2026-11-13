@@ -127,6 +127,15 @@ describe('renderSheetSVG', () => {
     expect(gridTexts(doc)[0].textContent).toBe('1 + 1');
   });
 
+  it('leaves blank (background) cells empty', () => {
+    const d = makeDesign(5, 6);
+    const full = mockPuzzle(d);
+    const puzzle: OkPuzzle = { ...full, expressions: full.expressions.map((e, i) => (d.cells[i] === 'w' ? null : e)) };
+    const texts = gridTexts(parse(renderSheetSVG(d, puzzle, 'puzzle')));
+    expect(texts).toHaveLength(d.cells.filter((id) => id === 'r').length);
+    expect(texts[0].textContent).toBe('1 + 1');
+  });
+
   it('lists colour names and values in the legend, without colour on the puzzle page', () => {
     const d = makeDesign(6, 6);
     const svg = renderSheetSVG(d, mockPuzzle(d), 'puzzle');

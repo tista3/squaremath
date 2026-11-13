@@ -19,7 +19,7 @@ function makeDesign(overrides: Partial<Design> = {}): Design {
     ],
     backgroundId: 'w',
     cells: Array.from({ length: width * width }, (_, i) => (i % 3 === 0 ? 'r' : 'w')),
-    puzzle: { ...DEFAULT_PUZZLE, ops: ['sub'] },
+    puzzle: { ...DEFAULT_PUZZLE, ops: ['sub'], blankBackground: false },
     print: { ...DEFAULT_PRINT, includeSolution: true },
     createdAt: 0,
     updatedAt: 0,

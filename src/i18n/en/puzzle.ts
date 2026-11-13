@@ -20,6 +20,9 @@ const dict: Record<string, string> = {
   legendValueTitle: 'Each colour lists its exact answers',
   newPuzzle: 'New puzzle',
   newPuzzleTitle: 'Same picture, new sums',
+  blankBackground: 'Leave {name} boxes empty',
+  blankBackgroundTitle:
+    'Background boxes get no sum. White ones simply stay white; for any other background colour the key shows "□" (colour the empty boxes).',
   paper: 'Paper',
   paperLetter: 'Letter',
   orientation: 'Page direction',

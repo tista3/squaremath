@@ -12,7 +12,8 @@ function smallestResult(entry: LegendEntry, mode: PuzzleSettings['legendMode']):
  * palette order, which keeps seeds and stored data stable. Ties keep their original order.
  */
 export function sortLegendForDisplay(legend: readonly LegendEntry[], mode: PuzzleSettings['legendMode']): LegendEntry[] {
-  return [...legend].sort((a, b) => smallestResult(a, mode) - smallestResult(b, mode));
+  // Blank entries ("□": colour the empty boxes) have no numbers to look up, so they come last.
+  return [...legend].sort((a, b) => Number(!!a.blank) - Number(!!b.blank) || smallestResult(a, mode) - smallestResult(b, mode));
 }
 
 const nameKey = (name: string) => name.trim().toLocaleLowerCase();

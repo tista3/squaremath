@@ -3,7 +3,8 @@
 // Payload = "1~" + lz(JSON of a positional array):
 //   [name, width, height, [[colourName, "rrggbb"], ...], backgroundIndex, cells, puzzle, print]
 //   cells  = one char per cell, CELL_ALPHABET[paletteIndex], row-major
-//   puzzle = [opsBitmask (ALL_OPS order), addSubMax, mulDivMax, legendModeIndex, seed]
+//   puzzle = [opsBitmask (ALL_OPS order), addSubMax, mulDivMax, legendModeIndex, seed, blankBackground 0|1]
+//            (links made before blankBackground existed have 5 entries → the default applies)
 //   print  = [paperIndex, orientationIndex, divSymbolIndex, mulSymbolIndex, flags (1 title, 2 solution, 4 swatches)]
 // lz-string's URI alphabet is [A-Za-z0-9+$-], so with "~" the payload never contains '/', '?' or '#'.
 import { compressToEncodedURIComponent } from 'lz-string';
@@ -30,7 +31,7 @@ const FLAG_TITLE = 1;
 const FLAG_SOLUTION = 2;
 const FLAG_SWATCHES = 4;
 
-type CompactPuzzle = [number, number, number, number, number];
+type CompactPuzzle = [number, number, number, number, number, number];
 type CompactPrint = [number, number, number, number, number];
 type Compact = [string, number, number, [string, string][], number, string, CompactPuzzle, CompactPrint];
 
@@ -48,7 +49,7 @@ function toCompact(d: Design): Compact {
     d.palette.map((c) => [c.name, c.hex.slice(1)]),
     bg,
     cellsToString(d),
-    [opsMask, p.addSubMax, p.mulDivMax, LEGEND_MODES.indexOf(p.legendMode), p.seed],
+    [opsMask, p.addSubMax, p.mulDivMax, LEGEND_MODES.indexOf(p.legendMode), p.seed, p.blankBackground ? 1 : 0],
     [
       PAPERS.indexOf(pr.paper),
       ORIENTATIONS.indexOf(pr.orientation),
@@ -68,13 +69,14 @@ const paletteId = (i: number) => `c${i}`;
 
 function expandPuzzle(raw: unknown): Partial<Record<keyof PuzzleSettings, unknown>> | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const [mask, addSubMax, mulDivMax, legend, seed] = raw;
+  const [mask, addSubMax, mulDivMax, legend, seed, blank] = raw;
   return {
     ops: typeof mask === 'number' ? ALL_OPS.filter((_, i) => mask & (1 << i)) : undefined,
     addSubMax,
     mulDivMax,
     legendMode: at(LEGEND_MODES, legend),
     seed,
+    blankBackground: blank === 0 ? false : blank === 1 ? true : undefined,
   };
 }
 

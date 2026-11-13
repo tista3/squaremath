@@ -588,6 +588,7 @@ function expressionsSvg(design: Design, texts: string[], style: ExprStyle, layou
   for (let r = 0; r < region.rows; r++) {
     for (let c = 0; c < region.cols; c++) {
       const text = texts[(region.row0 + r) * design.width + region.col0 + c];
+      if (!text) continue;
       const cx = layout.gridX + (c + 0.5) * layout.cell;
       const cy = layout.gridY + (r + 0.5) * layout.cell;
       out.push(expressionText(text, cx, cy, style));
@@ -669,8 +670,9 @@ function solutionPage(design: Design, items: LegendItem[]): string {
 
 function puzzlePages(design: Design, puzzle: OkPuzzle, plan: SheetPlan): string[] {
   const { layout, tiles, tilesX, tilesY } = plan;
-  const texts = puzzle.expressions.map((e) => formatExpression(e, design.print));
-  const style = expressionStyle(texts, layout.cell);
+  // Blank (background) cells have no expression and stay empty.
+  const texts = puzzle.expressions.map((e) => (e ? formatExpression(e, design.print) : ''));
+  const style = expressionStyle(texts.filter(Boolean), layout.cell);
   const split = tiles.length > 1;
   return tiles.map((region, index) =>
     pageSvg(

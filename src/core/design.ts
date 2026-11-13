@@ -188,6 +188,7 @@ function normalizePuzzle(raw: unknown): PuzzleSettings {
     mulDivMax: clampInt(field(p, 'mulDivMax'), MUL_DIV_LIMITS.min, MUL_DIV_LIMITS.max, DEFAULT_PUZZLE.mulDivMax),
     legendMode: pick(field(p, 'legendMode'), ['range', 'value'], DEFAULT_PUZZLE.legendMode),
     seed: typeof seed === 'number' && Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : DEFAULT_PUZZLE.seed,
+    blankBackground: bool(field(p, 'blankBackground'), DEFAULT_PUZZLE.blankBackground),
   };
 }
 

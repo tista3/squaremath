@@ -1,4 +1,5 @@
 // OWNER: core-puzzle agent. Pure, deterministic puzzle generation.
+import { isPaperColor } from './colors';
 import { createRng, mixSeed, type Rng } from './rng';
 import {
   ADD_SUB_LIMITS,
@@ -151,6 +152,7 @@ export function clampPuzzleSettings(s: PuzzleSettings): PuzzleSettings {
     mulDivMax: clampInt(s.mulDivMax, MUL_DIV_LIMITS.min, MUL_DIV_LIMITS.max, DEFAULT_PUZZLE.mulDivMax),
     legendMode: s.legendMode === 'value' ? 'value' : 'range',
     seed: Number.isFinite(s.seed) ? Math.trunc(s.seed) >>> 0 : DEFAULT_PUZZLE.seed,
+    blankBackground: s.blankBackground !== false,
   };
 }
 
@@ -198,12 +200,14 @@ export function generatePuzzle(design: Design): PuzzleResult {
   if (settings.ops.length === 0) return { ok: false, error: { code: 'noOps' } };
 
   const space = buildSpace(settings);
-  const { colorIds, counts, classOf } = collectClasses(design);
+  const blankId = settings.blankBackground ? design.backgroundId : null;
+  const { colorIds, counts, classOf } = collectClasses(design, blankId);
   const k = colorIds.length;
   if (k > space.results.length) {
     return { ok: false, error: { code: 'tooManyColors', colorsUsed: k, resultsAvailable: space.results.length } };
   }
-  if (k === 0) return { ok: true, expressions: [], legend: [] };
+  const blankEntries = blankLegend(design, blankId);
+  if (k === 0) return { ok: true, expressions: design.cells.map(() => null), legend: blankEntries };
 
   const legendRng = createRng(mixSeed(settings.seed, LEGEND_SALT, k, space.results.length));
   const pairs = pairTable(space);
@@ -217,12 +221,22 @@ export function generatePuzzle(design: Design): PuzzleResult {
 
   // Value mode lists exact numbers, so it only lists the ones some cell really produces.
   const used = classes.map(() => new Set<number>());
-  expressions.forEach((e, i) => used[classOf[i]].add(e.result));
+  expressions.forEach((e, i) => e && used[classOf[i]].add(e.result));
   const legend = classes.map(({ colorId, values }, c): LegendEntry => {
     const shown = settings.legendMode === 'value' ? values.filter((v) => used[c].has(v)) : values;
     return { colorId, min: shown[0], max: shown[shown.length - 1], values: shown };
   });
-  return { ok: true, expressions, legend };
+  return { ok: true, expressions, legend: [...legend, ...blankEntries] };
+}
+
+/**
+ * Legend entry for the blank background: needed only when the background is a real colour (the child must
+ * colour the empty boxes); the empty boxes of a paper-white background simply stay as they are.
+ */
+function blankLegend(design: Design, blankId: string | null): LegendEntry[] {
+  if (blankId === null || !design.cells.includes(blankId)) return [];
+  const hex = design.palette.find((p) => p.id === blankId)?.hex ?? '#ffffff';
+  return isPaperColor(hex) ? [] : [{ colorId: blankId, min: 0, max: 0, values: [], blank: true }];
 }
 
 /**
@@ -231,8 +245,13 @@ export function generatePuzzle(design: Design): PuzzleResult {
  * cells all share one colour. Meant for the puzzle page, with quick fixes such as higher limits or fewer colours.
  */
 export function puzzleWarnings(design: Design, result: PuzzleResult): PuzzleWarning[] {
-  if (!result.ok || result.expressions.length === 0) return [];
-  const { expressions, legend } = result;
+  if (!result.ok) return [];
+  // Blank cells have no expression; the indices below refer to the remaining (puzzle) cells.
+  const puzzleCells = result.expressions.flatMap((e, i) => (e ? [i] : []));
+  if (puzzleCells.length === 0) return [];
+  const expressions = puzzleCells.map((i) => result.expressions[i]!);
+  const cellColor = puzzleCells.map((i) => design.cells[i]);
+  const legend = result.legend.filter((entry) => !entry.blank);
   const cells = expressions.length;
   const ops = clampPuzzleSettings(design.puzzle).ops;
   const warnings: PuzzleWarning[] = [];
@@ -247,7 +266,7 @@ export function puzzleWarnings(design: Design, result: PuzzleResult): PuzzleWarn
     const answers = new Set<number>();
     let count = 0;
     expressions.forEach((e, i) => {
-      if (design.cells[i] !== colorId) return;
+      if (cellColor[i] !== colorId) return;
       answers.add(e.result);
       count++;
     });
@@ -262,7 +281,7 @@ export function puzzleWarnings(design: Design, result: PuzzleResult): PuzzleWarn
     if (cells >= WARN_MIN_CELLS_FOR_SHARES && indices.length < cells * WARN_MIN_OP_SHARE) {
       warnings.push({ code: 'opImbalance', op, count: indices.length, cells });
     }
-    const colors = new Set(indices.map((i) => design.cells[i]));
+    const colors = new Set(indices.map((i) => cellColor[i]));
     if (legend.length >= 2 && indices.length >= WARN_MIN_OP_CELLS_FOR_REVEAL && colors.size === 1) {
       warnings.push({ code: 'opRevealsColor', op, colorId: [...colors][0] });
     }
@@ -276,8 +295,12 @@ export function formatExpression(e: Expression, p: Pick<PrintSettings, 'divSymbo
   return `${e.a} ${symbol} ${e.b}`;
 }
 
-/** Range mode: "1–10" (en dash) or "7" when min===max. Value mode: "6, 12, 15". */
+/** Shown instead of numbers for a blank legend entry ("colour the empty boxes"); language-neutral. */
+export const BLANK_SYMBOL = '□';
+
+/** Range mode: "1–10" (en dash) or "7" when min===max. Value mode: "6, 12, 15". Blank entry: "□". */
 export function formatLegendValues(entry: LegendEntry, mode: PuzzleSettings['legendMode']): string {
+  if (entry.blank) return BLANK_SYMBOL;
   if (mode === 'value') return entry.values.join(', ');
   return entry.min === entry.max ? `${entry.min}` : `${entry.min}–${entry.max}`;
 }
@@ -411,9 +434,16 @@ function sampleOperands(space: Space, op: Op, v: number, nice: boolean, rng: Rng
 // ---------------------------------------------------------------------------------------------
 // Legend
 
-/** Colour ids used by the cells (palette order; unknown ids appended defensively) and per-cell class index. */
-function collectClasses(design: Design): { colorIds: string[]; counts: number[]; classOf: Int32Array } {
+/**
+ * Colour ids that get expressions (palette order; unknown ids appended defensively; `blankId` left out) and
+ * the per-cell class index (−1 for blank cells).
+ */
+function collectClasses(
+  design: Design,
+  blankId: string | null,
+): { colorIds: string[]; counts: number[]; classOf: Int32Array } {
   const used = new Set(design.cells);
+  if (blankId !== null) used.delete(blankId);
   const colorIds = design.palette.map((p) => p.id).filter((id) => used.has(id));
   for (const id of used) if (!colorIds.includes(id)) colorIds.push(id);
 
@@ -421,9 +451,9 @@ function collectClasses(design: Design): { colorIds: string[]; counts: number[];
   const counts = new Array<number>(colorIds.length).fill(0);
   const classOf = new Int32Array(design.cells.length);
   design.cells.forEach((id, i) => {
-    const c = index.get(id)!;
+    const c = index.get(id) ?? -1;
     classOf[i] = c;
-    counts[c]++;
+    if (c >= 0) counts[c]++;
   });
   return { colorIds, counts, classOf };
 }
@@ -780,7 +810,7 @@ function generateExpressions(
   classes: ColorClass[],
   classOf: Int32Array,
   seed: number,
-): Expression[] {
+): (Expression | null)[] {
   const width = design.width > 0 ? design.width : design.cells.length;
   const state: CellState = {
     usage: new Map(),
@@ -789,14 +819,20 @@ function generateExpressions(
     classOpCounts: classes.map(() => ALL_OPS.map(() => 0)),
     classPlaced: classes.map(() => 0),
   };
-  const expressions: Expression[] = [];
+  const expressions: (Expression | null)[] = [];
   for (let i = 0; i < design.cells.length; i++) {
+    const c = classOf[i];
+    if (c < 0) {
+      expressions.push(null); // blank background cell
+      continue;
+    }
     // Row-major order: comparing with the left and upper cell covers every orthogonal pair once.
     const neighbours: Expression[] = [];
-    if (i % width > 0) neighbours.push(expressions[i - 1]);
-    if (i >= width) neighbours.push(expressions[i - width]);
+    const left = i % width > 0 ? expressions[i - 1] : null;
+    const up = i >= width ? expressions[i - width] : null;
+    if (left) neighbours.push(left);
+    if (up) neighbours.push(up);
     const rng = createRng(mixSeed(seed, CELL_SALT, i));
-    const c = classOf[i];
     const expr = chooseExpression(space, classes[c], c, neighbours, state, rng);
     const key = expressionKey(expr);
     const o = ALL_OPS.indexOf(expr.op);

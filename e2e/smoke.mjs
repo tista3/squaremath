@@ -80,10 +80,16 @@ async function solveWithKeyboard(page, design) {
   for (let r = 0; r < design.height; r++) {
     for (let k = 0; k < design.width; k++) {
       const c = r % 2 === 0 ? k : design.width - 1 - k;
-      const want = slotByHex.indexOf(hexAt(r * design.width + c)) + 1;
-      check(want > 0, `legend has the colour of cell ${r},${c}`);
-      if (want !== slot) await page.keyboard.press(String((slot = want)));
-      await page.keyboard.press('Space');
+      const i = r * design.width + c;
+      const want = slotByHex.indexOf(hexAt(i)) + 1;
+      // A blank paper-white background ("leave White boxes empty") has no legend entry and stays uncoloured.
+      const colorId = design.palette[ALPHABET.indexOf(design.cells[i])].id;
+      const blank = design.puzzle.blankBackground !== false && colorId === design.backgroundId;
+      check(want > 0 || blank, `legend has the colour of cell ${r},${c}`);
+      if (want > 0) {
+        if (want !== slot) await page.keyboard.press(String((slot = want)));
+        await page.keyboard.press('Space');
+      }
       if (k < design.width - 1) await page.keyboard.press(r % 2 === 0 ? 'ArrowRight' : 'ArrowLeft');
     }
     if (r < design.height - 1) await page.keyboard.press('ArrowDown');

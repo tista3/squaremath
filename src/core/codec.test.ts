@@ -33,7 +33,7 @@ function sampleDesign(width: number, height: number, colors: number): Design {
     ...d,
     backgroundId: ids[1],
     cells,
-    puzzle: { ops: ['sub', 'div'], addSubMax: 345, mulDivMax: 12, legendMode: 'value', seed: 4000000000 },
+    puzzle: { ops: ['sub', 'div'], addSubMax: 345, mulDivMax: 12, legendMode: 'value', seed: 4000000000, blankBackground: false },
     print: {
       paper: 'Letter',
       orientation: 'landscape',

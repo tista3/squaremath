@@ -154,7 +154,7 @@ describe('normalizeDesign', () => {
     expect(d.backgroundId).toBe('a');
     expect(d.cells).toHaveLength(4 * GRID_MAX);
     expect(d.cells.slice(0, 5)).toEqual(['b', 'a', 'a', 'a', 'a']);
-    expect(d.puzzle).toEqual({ ops: ['add', 'mul'], addSubMax: 1000, mulDivMax: 2, legendMode: 'range', seed: 0xffffffff });
+    expect(d.puzzle).toEqual({ ops: ['add', 'mul'], addSubMax: 1000, mulDivMax: 2, legendMode: 'range', seed: 0xffffffff, blankBackground: true });
     expect(d.print).toEqual({ ...DEFAULT_PRINT, orientation: 'landscape', divSymbol: ':', includeSolution: true });
     expect(d.createdAt).toBeGreaterThan(0);
     expect(d.updatedAt).toBe(d.createdAt);

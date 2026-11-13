@@ -19,10 +19,12 @@ import { LegendBar, type Tool } from './LegendBar';
 import { SolveCanvas, type BoardKeys, type StrokeHandlers } from './SolveCanvas';
 import {
   countFilled,
+  countTargets,
   initialSolveState,
   isSolved,
   sanitizeProgress,
   solveReducer,
+  solveTargets,
   wrongMask,
   type SolveAction,
   type SolveState,
@@ -58,7 +60,10 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
 
-  const solved = isSolved(state.filled, design.cells);
+  // What each cell must be coloured; null for blank paper-white cells, which can't be painted.
+  const targets = useMemo(() => solveTargets(design.cells, puzzle), [design.cells, puzzle]);
+  const paintable = (cells: number[]) => cells.filter((cell) => targets[cell] !== null);
+  const solved = isSolved(state.filled, targets);
   // Celebrate when the picture gets finished here, not every time a finished one is reopened.
   const [celebrating, setCelebrating] = useState(false);
   const [wasSolved, setWasSolved] = useState(solved);
@@ -68,26 +73,26 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
   }
 
   const labels = useMemo(
-    () => puzzle.expressions.map((e) => formatExpression(e, design.print)),
+    () => puzzle.expressions.map((e) => (e ? formatExpression(e, design.print) : '')),
     [puzzle.expressions, design.print],
   );
   const hexById = useMemo(() => new Map(design.palette.map((c) => [c.id, c.hex])), [design.palette]);
   const nameById = useMemo(() => new Map(items.map((item) => [item.colorId, item.name])), [items]);
   const fills = useMemo(() => state.filled.map((id) => (id === null ? null : (hexById.get(id) ?? null))), [state.filled, hexById]);
-  const wrong = useMemo(() => (check ? wrongMask(state.filled, design.cells) : null), [check, state.filled, design.cells]);
+  const wrong = useMemo(() => (check ? wrongMask(state.filled, targets) : null), [check, state.filled, targets]);
   const wrongCount = wrong ? wrong.filter(Boolean).length : 0;
   const checkResult = wrongCount ? t('solve.wrongCount', { n: wrongCount }) : t('solve.allGood');
 
   const stroke: StrokeHandlers = {
     start: () => dispatch({ type: 'strokeStart' }),
-    paint: (cells) => dispatch({ type: 'paint', cells, value: tool }),
+    paint: (cells) => dispatch({ type: 'paint', cells: paintable(cells), value: tool }),
     end: () => dispatch({ type: 'strokeEnd' }),
     cancel: () => dispatch({ type: 'strokeCancel' }),
   };
 
   const keys: BoardKeys = {
     // Outside a stroke every paint is its own undo step.
-    paintCell: (cell, erase) => dispatch({ type: 'paint', cells: [cell], value: erase ? null : tool }),
+    paintCell: (cell, erase) => dispatch({ type: 'paint', cells: paintable([cell]), value: erase ? null : tool }),
     pickSlot: (slot) => {
       if (slot === 0) setTool(null);
       else if (items[slot - 1]) setTool(items[slot - 1].colorId);
@@ -138,7 +143,7 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
       <div className="toolbar solve-toolbar">
         <DesignBackLink basePath={basePath} readOnly={readOnly} />
         <h1 className="solve-title">{design.name}</h1>
-        <ProgressMeter done={countFilled(state.filled)} total={design.cells.length} />
+        <ProgressMeter done={countFilled(state.filled, targets)} total={countTargets(targets)} />
         {solved && !celebrating && (
           <IconButton icon="star" label={t('solve.solvedAgain')} className="solve-solved" onClick={() => setCelebrating(true)} />
         )}

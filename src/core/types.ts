@@ -30,6 +30,8 @@ export interface PuzzleSettings {
   legendMode: 'range' | 'value';
   /** uint32 seed; the same design + settings + seed always yields the identical puzzle. */
   seed: number;
+  /** Cells of the background colour get no expression: they stay empty on the sheet (default on). */
+  blankBackground: boolean;
 }
 
 export type PaperSize = 'A4' | 'Letter';
@@ -94,6 +96,11 @@ export interface LegendEntry {
   max: number;
   /** Sorted list of results that actually occur / are assigned to this colour (value mode shows these). */
   values: number[];
+  /**
+   * The colour's cells have no expression (PuzzleSettings.blankBackground): the key tells the child to colour
+   * the empty boxes with it. Only listed for a background that is not paper-white; min/max are 0, values empty.
+   */
+  blank?: boolean;
 }
 
 export type PuzzleError =
@@ -104,8 +111,8 @@ export type PuzzleError =
 export type PuzzleResult =
   | {
       ok: true;
-      /** Same order/length as design.cells. */
-      expressions: Expression[];
+      /** Same order/length as design.cells; null = blank cell (background with blankBackground on). */
+      expressions: (Expression | null)[];
       /** One entry per colour actually used in the design, in palette order. Result sets are disjoint. */
       legend: LegendEntry[];
     }
@@ -117,6 +124,7 @@ export const DEFAULT_PUZZLE: PuzzleSettings = {
   mulDivMax: 10,
   legendMode: 'range',
   seed: 1,
+  blankBackground: true,
 };
 
 export const DEFAULT_PRINT: PrintSettings = {

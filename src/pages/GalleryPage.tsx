@@ -5,7 +5,7 @@ import { buildShareUrl, encodeDesign } from '../core/codec';
 import { usedColorIds } from '../core/design';
 import { isNewerLibraryFile, parseLibraryFile } from '../core/fileio';
 import { clampGridSize, GRID_SIZE_PRESETS } from '../core/grid';
-import { TEMPLATES } from '../core/samples';
+import { TEMPLATES, templateCategory } from '../core/samples';
 import { GRID_MAX, GRID_MIN, NAME_MAX, type Design } from '../core/types';
 import { safeFileName } from '../export';
 import { t } from '../i18n';
@@ -14,6 +14,16 @@ import { downloadDesignsJson, downloadLibrary, findCopyOf, importSummary, MAX_IM
 import { ConfirmDialog, DesignPicture, IconButton, InlineEdit, Modal, OpsBadge, ShareDialog, useToast } from '../components/ui';
 import { routes, type DesignSubPage } from '../routes';
 import { useDesignStore } from '../state/store';
+import {
+  categoryCounts,
+  filterTemplates,
+  loadFilter,
+  NO_FILTER,
+  opsLevelsPresent,
+  saveFilter,
+  type OpsFilter,
+  type TemplateFilter,
+} from './gallery/templateFilter';
 import './GalleryPage.css';
 
 export default function GalleryPage() {
@@ -53,20 +63,96 @@ export default function GalleryPage() {
         )}
       </section>
 
-      <section className="stack" aria-labelledby="gallery-templates">
-        <h2 id="gallery-templates">{t('gallery.templates')}</h2>
-        <p className="muted">{t('gallery.templatesHint')}</p>
-        <div className="grid-cards">
-          {TEMPLATES.map((tpl) => (
-            <TemplateCard key={tpl.id} template={tpl} />
-          ))}
-        </div>
-      </section>
+      <TemplatesSection />
 
       <Modal open={creating} title={t('gallery.newDesign')} onClose={() => setCreating(false)} footer={<NewDesignFooter />}>
         <NewDesignForm onCreate={create} />
       </Modal>
     </div>
+  );
+}
+
+// ---- Templates (with category / kind-of-maths filters) ----
+
+const OPS_GLYPHS: Record<Exclude<OpsFilter, 'all'>, string> = { addsub: '+ −', muldiv: '× ÷', mixed: '+ − × ÷' };
+/** The kinds of maths among the built-in templates; the filter is only offered when there is a choice. */
+const OPS_LEVELS_PRESENT = opsLevelsPresent(TEMPLATES);
+
+function TemplatesSection() {
+  const [filter, setFilterState] = useState<TemplateFilter>(loadFilter);
+  const setFilter = (next: Partial<TemplateFilter>) => {
+    const merged = { ...filter, ...next };
+    setFilterState(merged);
+    saveFilter(merged);
+  };
+
+  const chips = useMemo(() => categoryCounts(TEMPLATES, filter.ops, templateCategory), [filter.ops]);
+  // A remembered category / maths kind that no longer exists (templates changed) shows everything instead.
+  const effective: TemplateFilter = {
+    category: chips.some((c) => c.category === filter.category) ? filter.category : 'all',
+    ops: filter.ops === 'all' || OPS_LEVELS_PRESENT.includes(filter.ops) ? filter.ops : 'all',
+  };
+  const shown = filterTemplates(TEMPLATES, effective, templateCategory);
+
+  return (
+    <section className="stack" aria-labelledby="gallery-templates">
+      <h2 id="gallery-templates">{t('gallery.templates')}</h2>
+      <p className="muted">{t('gallery.templatesHint')}</p>
+      <div className="template-filters">
+        <div className="chips" role="group" aria-label={t('gallery.filterCategory')}>
+          {chips.map(({ category, count }) => (
+            <button
+              key={category}
+              type="button"
+              className="btn chip"
+              aria-pressed={effective.category === category}
+              onClick={() => setFilter({ category })}
+            >
+              {t(`gallery.category_${category}`)}
+              <span className="chip-count" aria-hidden="true">
+                {count}
+              </span>
+              <span className="visually-hidden">{t('gallery.templateCount', { count })}</span>
+            </button>
+          ))}
+        </div>
+        {OPS_LEVELS_PRESENT.length > 1 && (
+          <div className="chips ops-chips" role="group" aria-label={t('gallery.filterOps')}>
+            <button type="button" className="btn chip" aria-pressed={effective.ops === 'all'} onClick={() => setFilter({ ops: 'all' })}>
+              {t('gallery.opsAll')}
+            </button>
+            {OPS_LEVELS_PRESENT.map((level) => (
+              <button
+                key={level}
+                type="button"
+                className="btn chip ops-chip"
+                aria-pressed={effective.ops === level}
+                aria-label={t(`gallery.ops_${level}`)}
+                title={t(`gallery.ops_${level}`)}
+                onClick={() => setFilter({ ops: level })}
+              >
+                {OPS_GLYPHS[level]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {shown.length > 0 ? (
+        <div className="grid-cards">
+          {shown.map((tpl) => (
+            <TemplateCard key={tpl.id} template={tpl} />
+          ))}
+        </div>
+      ) : (
+        <div className="panel template-none">
+          <p className="muted">{t('gallery.noTemplates')}</p>
+          <button type="button" className="btn" onClick={() => setFilter(NO_FILTER)}>
+            <Icon name="undo" />
+            {t('gallery.showAll')}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -236,13 +322,24 @@ function DesignCard({ design }: { design: Design }) {
   );
 }
 
+const solvePaths = new Map<string, string>();
+/** Solving needs no library copy: the template opens like a shared link, whose progress is kept per picture.
+ *  Cached per template so switching filters (which remounts cards) does not re-encode every template. */
+function templateSolvePath(template: Design): string {
+  let path = solvePaths.get(template.id);
+  if (path === undefined) {
+    path = routes.sub(routes.shared(encodeDesign(template)), 'solve');
+    solvePaths.set(template.id, path);
+  }
+  return path;
+}
+
 function TemplateCard({ template }: { template: Design }) {
   const store = useDesignStore();
   const toast = useToast();
   const navigate = useNavigate();
   const titleId = useId();
-  // Solving needs no library copy: the template opens like a shared link, whose progress is kept per picture.
-  const solvePath = useMemo(() => routes.sub(routes.shared(encodeDesign(template)), 'solve'), [template]);
+  const solvePath = templateSolvePath(template);
 
   /** Opens the user's unchanged copy of this template when there is one, otherwise saves a new copy. */
   const use = () => {

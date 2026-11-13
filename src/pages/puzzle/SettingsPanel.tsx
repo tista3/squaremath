@@ -99,6 +99,12 @@ function MathSettings({ design, setPuzzle }: { design: Design; setPuzzle: (p: Pa
           ]}
         />
       </Field>
+      <Toggle
+        label={t('puzzle.blankBackground', { name: backgroundName(design) })}
+        title={t('puzzle.blankBackgroundTitle')}
+        checked={p.blankBackground}
+        onChange={(blankBackground) => setPuzzle({ blankBackground })}
+      />
       <button type="button" className="btn big puzzle-dice" title={t('puzzle.newPuzzleTitle')} onClick={() => setPuzzle({ seed: randomSeed() })}>
         <Icon name="dice" /> {t('puzzle.newPuzzle')}
       </button>
@@ -188,9 +194,23 @@ function SymbolLabel({ text }: { text: string }) {
   return <span className="puzzle-symbol-label">{text}</span>;
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function backgroundName(design: Design): string {
+  return design.palette.find((c) => c.id === design.backgroundId)?.name ?? '';
+}
+
+function Toggle({
+  label,
+  title,
+  checked,
+  onChange,
+}: {
+  label: string;
+  title?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <label className="puzzle-toggle">
+    <label className="puzzle-toggle" title={title}>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="puzzle-toggle-track" aria-hidden="true" />
       <span>{label}</span>

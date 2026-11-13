@@ -104,6 +104,7 @@ function sanitizePuzzle(raw: Record<string, unknown>, fallback: PuzzleSettings):
     mulDivMax: clampLimit(Number(raw.mulDivMax), MUL_DIV_LIMITS, fallback.mulDivMax),
     legendMode: oneOf(raw.legendMode, ['range', 'value'] as const, fallback.legendMode),
     seed,
+    blankBackground: boolOr(raw.blankBackground, fallback.blankBackground),
   };
 }
 
