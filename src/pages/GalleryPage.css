@@ -1,0 +1,219 @@
+/* OWNER: shell agent. Gallery (home) page. */
+
+.gallery .card-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  width: 100%;
+  /* Without these the automatic minimum height lets a tall picture stretch the box past square,
+     which pushes that card's title and buttons out of line with the rest of the row. */
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
+  border: 2px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+  background:
+    repeating-conic-gradient(var(--surface-2) 0 25%, transparent 0 50%) 0 0 / 20px 20px,
+    var(--surface);
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+
+.gallery .card-thumb:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.gallery .card-thumb .design-picture {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+}
+
+.gallery .card-name-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: -4px 0;
+  cursor: text;
+}
+
+.gallery .card-name {
+  font-size: 1.1rem;
+  padding-right: 34px; /* room for the always-visible rename icon */
+}
+
+.gallery .card-name-icon {
+  position: absolute;
+  right: 10px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.gallery .card-name:focus + .card-name-icon {
+  display: none;
+}
+
+.gallery .card-title {
+  padding: 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.gallery .card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 0 4px;
+}
+
+.gallery .card-meta > span:not(.badge) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+/* Icon actions: as many 44px+ columns as fit, wrapping onto a second row on narrow cards. */
+.gallery .card-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--touch), 1fr));
+  gap: 4px;
+}
+
+.gallery .card-actions .btn.icon {
+  width: 100%;
+}
+
+.gallery .card-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.gallery .card-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gallery .template-card .card-buttons {
+  margin-top: auto;
+}
+
+.gallery .card-buttons .btn {
+  flex: 1 1 auto;
+  gap: 6px;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
+.gallery .card-buttons .btn .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.gallery .card-buttons .btn.primary {
+  flex-grow: 2;
+}
+
+.gallery .empty-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+}
+
+.gallery .empty-art {
+  width: 96px;
+  flex: none;
+}
+
+.gallery .empty-art rect {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.gallery .empty-art .on {
+  fill: #e63946;
+}
+
+.gallery .empty-art .off {
+  fill: var(--surface);
+}
+
+.gallery .empty-text {
+  flex: 1;
+  min-width: 220px;
+}
+
+.gallery .new-design .seg .btn {
+  min-width: 64px;
+}
+
+.gallery .size-range {
+  align-self: center;
+}
+
+@media (max-width: 480px) {
+  .gallery .page-header .toolbar {
+    width: 100%;
+  }
+
+  .gallery .page-header .toolbar .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* Phones: two cards per row so the templates are not one very long column. */
+@media (max-width: 560px) {
+  .gallery .grid-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .gallery .card {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .gallery .card-thumb {
+    padding: 6px;
+  }
+
+  .gallery .card-meta {
+    gap: 4px 10px;
+    font-size: 0.9rem;
+  }
+
+  .gallery .card-buttons {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .gallery .card-buttons .btn {
+    padding-inline: 8px;
+    white-space: normal; /* very narrow phones: wrap rather than overflow the card */
+    text-align: center;
+  }
+
+  .gallery .empty-state {
+    flex-wrap: nowrap;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .gallery .empty-art {
+    width: 56px;
+  }
+
+  .gallery .empty-text {
+    min-width: 0;
+    gap: 4px;
+  }
+}

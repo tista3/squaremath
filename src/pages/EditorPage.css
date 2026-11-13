@@ -1,0 +1,414 @@
+/* Editor page. Layout: desktop = tools | canvas | palette; tablet = tools | canvas + colour strip, palette
+   editor below; phone = one tool row, canvas + colour strip, palette editor below. The canvas fills the
+   viewport height that is left, so tools, picture and colours fit on one screen. */
+
+.ed-header {
+  flex-wrap: wrap;
+  gap: var(--gap, 8px);
+}
+
+/* The title takes the free space of the header row instead of a row of its own. */
+.ed-title-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.ed-title.inline-edit {
+  width: 100%;
+  font-size: 1.4rem;
+  padding-right: 36px;
+  /* Always-visible hint that the name can be changed (no hover on touch screens). */
+  border-bottom-color: var(--border, #999);
+  border-bottom-style: dashed;
+}
+
+.ed-title.inline-edit:focus {
+  border-bottom-color: var(--accent, #3b6cff);
+  border-bottom-style: solid;
+}
+
+.ed-title-pencil {
+  position: absolute;
+  right: 10px;
+  color: var(--muted, #666);
+  pointer-events: none;
+}
+
+.ed-title-wrap:focus-within .ed-title-pencil {
+  display: none;
+}
+
+.ed-layout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(240px, 300px);
+  gap: var(--gap, 12px);
+  align-items: start;
+}
+
+/* Tools */
+.ed-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Stick below the sticky app bar, and scroll inside when taller than the screen. */
+  position: sticky;
+  top: calc(var(--app-header-height, 60px) + 8px);
+  max-height: calc(100dvh - var(--app-header-height, 60px) - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+
+.ed-tool-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ed-current {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius, 12px);
+  border: 3px solid var(--text, #222);
+  box-sizing: border-box;
+}
+
+/* The "more" toggle only exists on phones; on wider screens its tools are shown in the column. */
+.ed-more {
+  display: none;
+}
+
+.ed-more-tools {
+  display: contents;
+}
+
+/* Canvas */
+.ed-canvas-area {
+  min-width: 0;
+}
+
+.ed-canvas-wrap {
+  /* Children below the canvas (hint, colour strip) are measured as one footer: no margins, only the gap. */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.ed-canvas-scroll {
+  overflow: auto;
+  max-width: 100%;
+  display: flex;
+}
+
+.ed-canvas {
+  display: block;
+  margin: 0 auto;
+  border: 2px solid var(--text, #222);
+  border-radius: 4px;
+  background: #ffffff;
+  flex: none;
+  box-sizing: content-box;
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.ed-canvas:focus {
+  outline: none;
+}
+
+/* Drawn inside the box: the scroll container would clip an outer outline. */
+.ed-canvas:focus-visible {
+  outline: 3px solid var(--accent, #3b6cff);
+  outline-offset: -3px;
+}
+
+.ed-pan-hint {
+  text-align: center;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Colour strip under the canvas (phones and tablets only, see media queries). */
+.ed-strip {
+  display: none;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  /* Room for the selection ring, which the scroll box would otherwise clip. */
+  padding: 6px;
+}
+
+.ed-strip-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch, 44px);
+  height: var(--touch, 44px);
+  padding: 0;
+  border: 2px solid var(--border, #999);
+  border-radius: var(--radius-sm, 10px);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.35);
+  cursor: pointer;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+}
+
+.ed-strip-btn.selected {
+  border-color: var(--text, #222);
+  box-shadow: 0 0 0 2px var(--surface, #fff), 0 0 0 5px var(--accent, #3b6cff);
+}
+
+.ed-strip-btn:focus-visible {
+  outline: 3px solid var(--accent, #3b6cff);
+  outline-offset: 3px;
+}
+
+/* Palette */
+.ed-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ed-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.ed-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px 6px;
+}
+
+.ed-swatch-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Clears the selection ring (6px + the global .swatch.selected scale) so it never covers the name. */
+  gap: 10px;
+  padding: 8px 2px 4px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--text, #222);
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius, 12px);
+}
+
+.ed-swatch-btn:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.ed-swatch {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border, #999);
+  border-radius: var(--radius, 12px);
+  box-sizing: border-box;
+}
+
+.ed-swatch.selected {
+  border-color: var(--text, #222);
+  box-shadow: 0 0 0 3px var(--surface, #fff), 0 0 0 6px var(--accent, #3b6cff);
+}
+
+.ed-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ed-swatch-name {
+  /* Up to two lines; the full name is in the button's tooltip. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: 0.75rem;
+  line-height: 1.15;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.ed-selected,
+.ed-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Colour, name, background star and delete always share one row; the name shrinks. */
+.ed-selected {
+  flex-wrap: nowrap;
+}
+
+.ed-color-name {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ed-add-name {
+  flex: 1 1 100px;
+}
+
+.ed-color-input {
+  width: 48px;
+  height: 48px;
+  padding: 2px;
+  border: 2px solid var(--border, #999);
+  border-radius: var(--radius, 12px);
+  background: var(--surface, #fff);
+  cursor: pointer;
+  flex: none;
+}
+
+.ed-hint {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* Size dialog */
+.ed-size .field-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.ed-size input[type='number'] {
+  width: 6em;
+  font-size: 1.2rem;
+}
+
+.ed-times {
+  font-size: 1.4rem;
+  padding-bottom: 1.6em;
+}
+
+.ed-check {
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.ed-check input {
+  width: 22px;
+  height: 22px;
+}
+
+/* Short desktop screens: two tool columns, so every tool fits without scrolling. */
+@media (min-width: 701px) and (max-height: 950px) {
+  .ed-tool-group {
+    display: grid;
+    grid-template-columns: repeat(2, 56px);
+    gap: 6px;
+    justify-items: center;
+  }
+  .ed-current {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1000px) {
+  .ed-layout {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .ed-palette {
+    grid-column: 1 / -1;
+  }
+  /* Colours are picked from the strip under the canvas; the panel below keeps rename/recolour/add. */
+  .ed-strip {
+    display: flex;
+  }
+  .ed-swatches {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .ed-page {
+    padding-top: 12px;
+    gap: 12px;
+  }
+  .ed-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ed-tools {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    gap: 6px 8px;
+  }
+  .ed-tool-group {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .ed-tools .btn.icon.big {
+    width: var(--touch, 44px);
+    min-height: var(--touch, 44px);
+  }
+  /* The colour strip shows the drawing colour. */
+  .ed-current {
+    display: none;
+  }
+  .ed-more {
+    display: inline-flex;
+  }
+  .ed-more-tools {
+    display: none;
+  }
+  .ed-tools.more-open .ed-more-tools {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 10px;
+  }
+  /* Page tabs are icon-only here; tighten them so back, name, share and tabs share one row. */
+  .ed-header {
+    gap: 6px;
+  }
+  .ed-header .design-nav > .btn {
+    padding-inline: 8px;
+  }
+  .ed-title-wrap {
+    flex-basis: 6rem;
+  }
+  .ed-title.inline-edit {
+    font-size: 1.15rem;
+  }
+}
+
+/* Narrow phones: the Draw tab (this page) gives its room to the design name; Puzzle and Solve stay. */
+@media (max-width: 420px) {
+  .ed-header .design-nav > .btn[aria-current='page'] {
+    display: none;
+  }
+}

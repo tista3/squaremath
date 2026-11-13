@@ -1,0 +1,38 @@
+// OWNER: puzzle-solve agent. Flat keys, English UI strings for namespace "solve" (used as t("solve.<key>")).
+const dict: Record<string, string> = {
+  boardLabel: 'Puzzle grid for "{name}". Pick a colour, then tap the squares.',
+  keysHelp:
+    'Keyboard: arrow keys move between squares, Space or Enter colours the square, Backspace clears it. Number keys 1 to 9 pick a colour, 0 picks the eraser, + and − zoom.',
+  cellAnnounce: 'Row {row}, column {col}: {sum}, {colour}',
+  cellEmpty: 'not coloured',
+  legend: 'Colours',
+  pickColor: '{name}: {values}',
+  eraser: 'Eraser',
+  undo: 'Undo',
+  check: 'Check',
+  checkTitle: 'Show squares with the wrong colour',
+  wrongCount: '{n} wrong',
+  allGood: 'All good',
+  reset: 'Start over',
+  resetTitle: 'Start over?',
+  resetMessage: 'All coloured squares will be cleared.',
+  resetConfirm: 'Clear',
+  progress: 'Coloured squares',
+  progressTitle: '{done} of {total} squares coloured',
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  zoomFit: 'Show the whole picture',
+  wellDone: 'Well done!',
+  close: 'Close',
+  toGallery: 'Gallery',
+  print: 'Print',
+  share: 'Share',
+  solvedAgain: 'Finished! Show the picture again',
+  again: 'Play again',
+  cannotSolveTitle: 'This puzzle cannot be made yet',
+  cannotSolveColors:
+    'This picture uses {used} colours, but the puzzle settings only give {available} different answers. Turn on more operations or use bigger numbers.',
+  cannotSolve: 'Something went wrong while making the puzzle. Try other puzzle settings.',
+  openSettings: 'Puzzle settings',
+};
+export default dict;

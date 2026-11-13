@@ -1,0 +1,34 @@
+/* Page tabs of a design (Draw / Puzzle & print / Solve), see DesignNav.tsx. */
+.design-nav {
+  flex-wrap: nowrap;
+}
+
+.design-nav > .btn {
+  position: relative;
+  padding-inline: 12px;
+}
+
+/* Icon-only tabs where space is short; the label stays as the accessible name. */
+.design-nav.compact .design-nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .design-nav .design-nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .design-nav.compact > .btn {
+    padding-inline: 8px;
+  }
+}

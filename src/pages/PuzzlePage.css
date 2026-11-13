@@ -1,0 +1,330 @@
+.puzzle-page .puzzle-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.puzzle-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: var(--gap, 12px);
+  align-items: start;
+  margin-top: var(--gap, 12px);
+}
+
+.puzzle-h2 {
+  margin: 0.25rem 0 0;
+  font-size: 1.15rem;
+}
+
+.puzzle-h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.puzzle-ops {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* .btn.big sets a smaller font with the same specificity as a single class, hence .btn.puzzle-op. */
+.btn.puzzle-op {
+  min-height: 64px;
+  padding: 8px;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Switched-on operations are filled, so on/off reads at a glance. */
+.btn.puzzle-op.active {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: var(--accent-text, #ffffff);
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.18);
+}
+
+.puzzle-limits,
+.puzzle-settings .seg {
+  flex-wrap: wrap;
+}
+
+.puzzle-symbol-label {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* "Auto" page direction: both paper shapes. */
+.puzzle-orient-auto {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.puzzle-orient-auto .puzzle-orient.portrait {
+  width: 11px;
+  height: 15px;
+}
+
+.puzzle-orient-auto .puzzle-orient.landscape {
+  width: 15px;
+  height: 11px;
+}
+
+.puzzle-custom input {
+  width: 7rem;
+}
+
+.puzzle-dice {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.puzzle-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap, 12px);
+}
+
+.puzzle-symbols .btn {
+  min-width: 48px;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+/* Little paper glyph for orientation buttons. */
+.puzzle-orient {
+  display: inline-block;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.puzzle-orient.portrait {
+  width: 14px;
+  height: 19px;
+}
+
+.puzzle-orient.landscape {
+  width: 19px;
+  height: 14px;
+}
+
+/* Switch-style checkbox; the real input stays focusable for keyboard users. */
+.puzzle-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.puzzle-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.puzzle-toggle-track {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--border, #cbd5e1);
+  transition: background 0.15s;
+}
+
+.puzzle-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform 0.15s;
+}
+
+.puzzle-toggle input:checked + .puzzle-toggle-track {
+  background: var(--accent, #2563eb);
+}
+
+.puzzle-toggle input:checked + .puzzle-toggle-track::after {
+  transform: translateX(20px);
+}
+
+.puzzle-toggle input:focus-visible + .puzzle-toggle-track {
+  outline: 3px solid var(--accent, #2563eb);
+  outline-offset: 2px;
+}
+
+.puzzle-issue {
+  flex-direction: column;
+}
+
+.puzzle-issue p {
+  margin: 0;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+}
+
+.puzzle-issue p > svg {
+  flex: none;
+}
+
+.puzzle-issue ul {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.puzzle-issue .toolbar {
+  margin-top: 8px;
+}
+
+.puzzle-issue-note {
+  margin: 0;
+  align-items: flex-start;
+}
+
+.puzzle-sheet-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius, 12px);
+  background: var(--bg, #f1f5f9);
+}
+
+.puzzle-sheet {
+  display: block;
+  width: 100%;
+  max-width: 900px;
+  max-height: 78vh;
+  height: auto;
+  object-fit: contain;
+  background: #fff;
+  box-shadow: var(--shadow, 0 2px 10px rgb(0 0 0 / 0.15));
+}
+
+.puzzle-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 6px 16px;
+}
+
+/* The colour name is the key information: it keeps its width, the numbers wrap below it if needed. */
+.puzzle-legend li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.puzzle-legend .swatch {
+  flex: none;
+}
+
+.puzzle-legend-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.puzzle-legend-values {
+  flex: 1 1 auto;
+  margin-left: auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #475569);
+}
+
+.puzzle-busy {
+  cursor: progress;
+  animation: puzzle-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes puzzle-pulse {
+  to {
+    opacity: 0.55;
+  }
+}
+
+@media (max-width: 860px) {
+  .puzzle-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* On small screens the preview comes first: it is what the child wants to see. */
+  .puzzle-preview {
+    order: -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .puzzle-actions .btn:not(.primary) span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+/*
+ * Browser print (menu or Ctrl+P while printing is unavailable): print only the sheet preview, not the
+ * settings around it. The Print button and Ctrl+P normally print the real page-sized sheet instead.
+ */
+@media print {
+  .puzzle-page > :not(.puzzle-layout),
+  .puzzle-settings,
+  .puzzle-preview > :not(.puzzle-sheet-wrap) {
+    display: none !important;
+  }
+
+  .puzzle-layout {
+    display: block;
+    margin: 0;
+  }
+
+  .puzzle-preview {
+    border: none;
+    padding: 0;
+  }
+
+  .puzzle-sheet-wrap {
+    padding: 0;
+    background: none;
+  }
+
+  .puzzle-sheet {
+    max-width: 100%;
+    max-height: none;
+    box-shadow: none;
+    break-after: page;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .puzzle-busy {
+    animation: none;
+  }
+
+  .puzzle-toggle-track,
+  .puzzle-toggle-track::after {
+    transition: none;
+  }
+}
