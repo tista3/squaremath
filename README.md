@@ -157,3 +157,7 @@ UI text lives in one dictionary per namespace in `src/i18n/en/` (`common`, `gall
 
 Colour names are part of each design, not of the UI. They default to English and users can rename
 them, so they are not translated.
+
+## License
+
+[MIT](LICENSE): free to use, copy, modify and share, including commercially, as long as the copyright notice is kept.
