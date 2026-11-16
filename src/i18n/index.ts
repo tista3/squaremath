@@ -9,6 +9,7 @@ import editor from './en/editor';
 import puzzle from './en/puzzle';
 import solve from './en/solve';
 import shared from './en/shared';
+import photo from './en/photo';
 
 type Dict = Record<string, string>;
 
@@ -21,7 +22,7 @@ function flatten(namespaces: Record<string, Dict>): Dict {
 }
 
 const LANGS: Record<string, Dict> = {
-  en: flatten({ common, gallery, editor, puzzle, solve, shared }),
+  en: flatten({ common, gallery, editor, puzzle, solve, shared, photo }),
 };
 
 let currentLang = 'en';

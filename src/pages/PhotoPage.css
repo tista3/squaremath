@@ -1,0 +1,501 @@
+/* OWNER: photo-ui agent. "Picture from a photo" page (src/pages/PhotoPage.tsx + src/pages/photo/*). */
+
+.photo-page .photo-title {
+  gap: 4px;
+}
+
+.photo-privacy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  margin-top: calc(var(--gap) * -1);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.photo-hint {
+  font-size: 0.9rem;
+}
+
+.photo-swatch {
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 5px;
+}
+
+/* ---- Step 1: drop zone ---- */
+
+.photo-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: min(52vh, 360px);
+  padding: 32px 20px;
+  border: 3px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s, transform 0.12s;
+}
+
+.photo-drop > .icon {
+  color: var(--accent);
+}
+
+.photo-drop:hover,
+.photo-drop.drag-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.photo-drop.drag-active {
+  transform: scale(1.01);
+}
+
+.photo-drop-title {
+  font-size: clamp(1.2rem, 1rem + 1vw, 1.6rem);
+  font-weight: 800;
+}
+
+.photo-picker-buttons {
+  justify-content: center;
+}
+
+/* The camera button only makes sense where `capture` opens a camera: phones and tablets. */
+@media (hover: hover) and (pointer: fine) {
+  .photo-camera {
+    display: none;
+  }
+}
+
+.photo-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: min(52vh, 360px);
+  font-weight: 650;
+}
+
+.photo-drop-banner {
+  position: fixed;
+  inset: auto 16px 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 3px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 1.15rem;
+  font-weight: 750;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+
+/* ---- Step 2: analysis + layouts ---- */
+
+.photo-analysis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: calc(var(--gap) * 1.5);
+}
+
+.photo-original {
+  position: relative;
+  flex: none;
+  max-width: 100%;
+  line-height: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.photo-original-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  /* No percentage here: the box drawn over the photo is sized in % of .photo-original, which must be exactly
+     as wide as the canvas (a % max-width is ignored when the shrink-to-fit wrapper is sized). 72px = page,
+     panel padding and borders. */
+  max-width: min(320px, calc(100vw - 72px));
+  max-height: 240px;
+}
+
+.photo-subject {
+  position: absolute;
+  border: 3px dashed #ffffff;
+  outline: 2px solid rgb(0 0 0 / 0.6);
+  border-radius: 4px;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.22);
+  pointer-events: none;
+}
+
+.photo-grid-box {
+  position: absolute;
+  border: 3px solid var(--accent);
+  outline: 2px solid #ffffff;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.photo-grid-number {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 1.5em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.photo-grid-badge {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.photo-analysis-text {
+  flex: 1;
+  min-width: min(100%, 240px);
+}
+
+.photo-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-facts .badge {
+  padding: 4px 12px;
+  gap: 6px;
+}
+
+.photo-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: calc(var(--gap) * 1.5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-presets > li {
+  display: flex;
+  min-width: 0;
+}
+
+.photo-preset {
+  flex: 1;
+  align-items: stretch;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+
+.photo-preset:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.photo-preset:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.photo-preset-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background:
+    repeating-conic-gradient(var(--surface-2) 0 25%, transparent 0 50%) 0 0 / 20px 20px,
+    var(--surface);
+  border: 2px solid var(--surface-2);
+}
+
+.photo-preset-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+}
+
+.photo-preset-label {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.photo-preset-hint {
+  font-size: 0.9rem;
+}
+
+.photo-preset-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+
+/* ---- Step 3: tuner ---- */
+
+.photo-tuner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 1fr);
+  gap: calc(var(--gap) * 1.5);
+  align-items: start;
+}
+
+.photo-preview {
+  position: sticky;
+  top: calc(var(--app-header-height) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.photo-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.photo-preview-head h2 {
+  margin-right: 4px;
+}
+
+.photo-preview-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.photo-preview-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(62vh, 640px);
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+
+.photo-preview[aria-busy='true'] .photo-preview-canvas {
+  opacity: 0.92;
+}
+
+.photo-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-palette-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.photo-palette-item .photo-swatch {
+  width: 22px;
+  height: 22px;
+}
+
+/* The palette is listed under the preview on wide screens and under the controls on narrow ones (where the
+   preview sticks to the top and must stay small). */
+.photo-palette-narrow {
+  display: none;
+}
+
+.photo-controls > .panel {
+  gap: calc(var(--gap) * 1.25);
+}
+
+.photo-tune-actions {
+  justify-content: space-between;
+}
+
+.photo-range-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.photo-range-head > label {
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.photo-range-head > output {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-range input[type='range'] {
+  width: 100%;
+  min-height: var(--touch);
+  cursor: pointer;
+}
+
+.photo-range.disabled {
+  opacity: 0.5;
+}
+
+.photo-range.disabled input[type='range'] {
+  cursor: not-allowed;
+}
+
+.photo-fixed-size-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-controls .seg {
+  align-self: flex-start;
+}
+
+.photo-background {
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.photo-background .photo-range {
+  margin-top: 6px;
+}
+
+.photo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--touch);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.photo-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.photo-create-button {
+  width: 100%;
+}
+
+/* Narrow screens: one column; the preview stays in view (smaller) while the controls scroll under it. */
+@media (max-width: 860px) {
+  .photo-tuner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .photo-preview {
+    top: var(--app-header-height);
+    z-index: 5;
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .photo-preview-head h2 {
+    font-size: 1.1rem;
+  }
+
+  .photo-preview-canvas {
+    max-height: 26vh;
+  }
+
+  .photo-preview-frame {
+    padding: 4px;
+  }
+
+  .photo-preview .photo-palette {
+    display: none;
+  }
+
+  .photo-palette-narrow {
+    display: flex;
+  }
+}
+
+@media (max-width: 480px) {
+  .photo-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .photo-preset {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .photo-preset-thumb {
+    padding: 6px;
+  }
+
+  .photo-preset-label {
+    font-size: 1rem;
+  }
+
+  .photo-picker-buttons .btn {
+    flex: 1 1 auto;
+  }
+
+  .photo-original-canvas {
+    max-height: 200px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-drop,
+  .photo-preset {
+    transition: none;
+  }
+
+  .photo-drop.drag-active,
+  .photo-preset:hover {
+    transform: none;
+  }
+}

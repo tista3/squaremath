@@ -2,6 +2,8 @@
 const dict: Record<string, string> = {
   title: 'Colour by maths',
   newDesign: 'New design',
+  fromPhoto: 'From photo',
+  fromPhotoHint: 'Make a picture from your own photo or drawing',
   myDesigns: 'My designs',
   templates: 'Templates',
   templatesHint: 'Pick a picture: colour your own copy, or solve it right away.',

@@ -46,6 +46,10 @@ export default function GalleryPage() {
             <Icon name="plus" />
             {t('gallery.newDesign')}
           </button>
+          <Link to={routes.photo()} className="btn big from-photo" title={t('gallery.fromPhotoHint')}>
+            <Icon name="image" />
+            {t('gallery.fromPhoto')}
+          </Link>
           <LibraryTransfer />
         </div>
       </header>

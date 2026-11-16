@@ -18,6 +18,7 @@ const PAGES: Record<DesignSubPage, ComponentType<DesignPageProps>> = {
   puzzle: lazy(() => import('./pages/PuzzlePage')),
   solve: lazy(() => import('./pages/SolvePage')),
 };
+const PhotoPage = lazy(() => import('./pages/PhotoPage'));
 const SHARED_SUBPAGES: DesignSubPage[] = ['puzzle', 'solve'];
 const APP_NAME = 'SquareMath';
 
@@ -41,6 +42,7 @@ function AppRoutes() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<GalleryRoute />} />
+          <Route path="photo" element={<PhotoRoute />} />
           <Route path="d/:id/:page" element={<OwnDesignRoute />} />
           <Route path="s/:payload" element={<SharedLandingRoute />} />
           <Route path="s/:payload/:page" element={<SharedDesignRoute />} />
@@ -159,6 +161,11 @@ function useDocumentTitle(title?: string) {
 function GalleryRoute() {
   useDocumentTitle();
   return <GalleryPage />;
+}
+
+function PhotoRoute() {
+  useDocumentTitle(t('photo.title'));
+  return <PhotoPage />;
 }
 
 function isSubPage(page: string | undefined, allowed: DesignSubPage[]): page is DesignSubPage {

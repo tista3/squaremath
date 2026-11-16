@@ -1,6 +1,8 @@
 // Route map (HashRouter). Shared contract — do not change without updating App.tsx.
 //
 //   /                      Gallery: my designs + templates, create / import / export library
+//   /photo                 Make a design from a photo (pick / drop / paste / camera → layouts → fine-tune → create);
+//                          the image is processed on the device only and is not kept in the URL
 //   /d/:id/edit            Editor (draw the picture, palette, size)        — own designs
 //   /d/:id/puzzle          Puzzle settings, sheet preview, print / PDF / PNG — own designs
 //   /d/:id/solve           Interactive on-screen colouring by solving       — own designs
@@ -11,6 +13,7 @@ export type DesignSubPage = 'edit' | 'puzzle' | 'solve';
 
 export const routes = {
   gallery: () => '/',
+  photo: () => '/photo',
   design: (id: string, page: DesignSubPage) => `/d/${encodeURIComponent(id)}/${page}`,
   shared: (payload: string) => `/s/${payload}`,
   /** Sibling page relative to a page's basePath ("/d/<id>" or "/s/<payload>"). */

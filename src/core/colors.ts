@@ -162,3 +162,22 @@ export function isPaperColor(hex: string): boolean {
   if (!norm) return false;
   return [1, 3, 5].every((i) => parseInt(norm.slice(i, i + 2), 16) >= 0xf0);
 }
+
+/** Every crayon name ranked by CIEDE2000 distance to `hex` (nearest first; ties keep CRAYONS order).
+ * Invalid input is treated as black. ranked[0].name === nearestColorName(hex). */
+export function rankedColorNames(hex: string): { name: string; hex: string; distance: number }[] {
+  const lab = hexToLab(normalizeHex(hex) ?? '#000000');
+  return CRAYONS.map((c, i) => ({ name: c.name, hex: c.hex, distance: deltaE2000(lab, CRAYON_LABS[i].lab), i }))
+    .sort((a, b) => a.distance - b.distance || a.i - b.i)
+    .map(({ name, hex: h, distance }) => ({ name, hex: h, distance }));
+}
+
+/** CIEDE2000 difference between two hex colours (invalid input is treated as black). */
+export function colorDifference(hexA: string, hexB: string): number {
+  return deltaE2000(hexToLab(normalizeHex(hexA) ?? '#000000'), hexToLab(normalizeHex(hexB) ?? '#000000'));
+}
+
+/** CIEDE2000 difference between two CIELAB colours ([L, a, b]). */
+export function deltaE(labA: readonly [number, number, number], labB: readonly [number, number, number]): number {
+  return deltaE2000(labA, labB);
+}

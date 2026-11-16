@@ -6,7 +6,7 @@ export type IconName =
   | 'pencil' | 'eraser' | 'fill' | 'picker' | 'undo' | 'redo' | 'check' | 'close' | 'palette'
   | 'grid' | 'play' | 'puzzle' | 'home' | 'image' | 'file' | 'refresh' | 'settings' | 'eye'
   | 'info' | 'warning' | 'link' | 'save' | 'back' | 'clear' | 'resize' | 'star'
-  | 'zoomIn' | 'zoomOut' | 'fit' | 'dice';
+  | 'zoomIn' | 'zoomOut' | 'fit' | 'dice' | 'camera' | 'lock';
 
 const SHAPES: Record<IconName, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
@@ -134,6 +134,20 @@ const SHAPES: Record<IconName, ReactNode> = {
         <circle cx="8.5" cy="15.5" r="1.3" />
         <circle cx="15.5" cy="15.5" r="1.3" />
       </g>
+    </>
+  ),
+  /** Take a photo with the device camera. */
+  camera: (
+    <>
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </>
+  ),
+  /** Private / stays on this device. */
+  lock: (
+    <>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </>
   ),
 };
