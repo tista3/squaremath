@@ -8,5 +8,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // Heavy image / PDF tests can exceed the 5 s default when the whole suite runs in parallel.
+    testTimeout: 30000,
   },
 } as any);

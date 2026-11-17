@@ -6,10 +6,13 @@ import { ANIMALS } from './templates/animals';
 import { FANTASY } from './templates/fantasy';
 import { FOOD } from './templates/food';
 import { WORLD } from './templates/world';
+import { CRITTERS } from './templates/critters';
+import { EVERYDAY } from './templates/everyday';
+import { SEASONS } from './templates/seasons';
 
 export { TEMPLATE_CATEGORIES, type TemplateCategory } from './templates/build';
 
-const SPECS: TemplateSpec[] = [...CLASSIC, ...FANTASY, ...ANIMALS, ...FOOD, ...WORLD];
+const SPECS: TemplateSpec[] = [...CLASSIC, ...FANTASY, ...ANIMALS, ...FOOD, ...WORLD, ...CRITTERS, ...EVERYDAY, ...SEASONS];
 
 /** All built-in templates, fixed ids "tpl-<slug>". */
 export const TEMPLATES: Design[] = SPECS.map(buildTemplate);

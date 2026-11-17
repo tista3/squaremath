@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeDesign, encodeDesign } from './codec';
 import { normalizeDesign, usedColorIds } from './design';
-import { generatePuzzle } from './puzzle';
+import { generatePuzzle, puzzleWarnings } from './puzzle';
 import { TEMPLATE_CATEGORIES, TEMPLATES, templateCategory } from './samples';
 import type { Design } from './types';
 
@@ -41,6 +41,8 @@ describe('built-in templates', () => {
   });
 
   it.each(TEMPLATES.map((t) => [t.id, t] as const))('%s yields a solvable puzzle', (_, t) => {
-    expect(generatePuzzle(t).ok).toBe(true);
+    const result = generatePuzzle(t);
+    expect(result.ok).toBe(true);
+    expect(puzzleWarnings(t, result).map((w) => w.code)).toEqual([]);
   });
 });
