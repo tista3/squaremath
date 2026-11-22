@@ -123,6 +123,43 @@ export function drawnSun(): RgbaImage {
   return noise(img, 3, 11);
 }
 
+/**
+ * A softly shaded cartoon blob on clean white paper, as in character art saved as JPEG: two-tone shaded body with a thin
+ * dark outline, two small eyes, two pink cheeks, a thin tail and light noise inside the drawing. 220×200; body
+ * centre (100, 100), radius 72; eyes at (78, 82) and (122, 82), cheeks at (64, 110) and (136, 110).
+ */
+export function shadedCartoon(): RgbaImage {
+  const img = blank(220, 200, [255, 255, 255]);
+  paint(img, [50, 40, 45], disc(100, 100, 74));
+  paint(img, [50, 40, 45], rect(170, 118, 40, 7));
+  const rng = createRng(5);
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      if (!disc(100, 100, 72)(x + 0.5, y + 0.5)) continue;
+      const grain = rng.next() * 8 - 4;
+      const across = x - 100;
+      const down = y - 100;
+      img.data.set([115 - across * 0.8 + grain, 175 - down * 0.75 + grain, 160 - (across - down) * 0.2 + grain, 255], (y * img.width + x) * 4);
+    }
+  }
+  for (const x of [78, 122]) paint(img, [25, 25, 30], disc(x, 82, 6));
+  for (const x of [64, 136]) paint(img, [240, 100, 130], disc(x, 110, 9));
+  return paint(img, [50, 40, 45], (x, y) => annulus(100, 108, 19, 21)(x, y) && y > 116);
+}
+
+/**
+ * An almost white cartoon blob on white paper, held only by a thin grey outline: body centre (100, 100),
+ * radius 70, 1.5 px outline, two small dark eyes. 200×200.
+ */
+export function paleCartoon(): RgbaImage {
+  const img = blank(200, 200, [255, 255, 255]);
+  paint(img, [120, 125, 135], disc(100, 100, 70));
+  paint(img, [243, 246, 250], disc(100, 100, 68.5));
+  paint(img, [225, 230, 240], (x, y) => disc(100, 100, 68.5)(x, y) && !disc(88, 86, 70)(x, y));
+  for (const x of [78, 122]) paint(img, [25, 25, 30], disc(x, 82, 6));
+  return img;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Grid pictures (worksheet-like): flat cells, grid lines, a printed "sum" in every cell.
 

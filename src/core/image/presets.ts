@@ -17,6 +17,9 @@ export function presetsFor(a: ImageAnalysis, base: ConvertParams): Preset[] {
   const hasBg = a.background !== null;
   const graphic = a.kind === 'graphic';
   const sc = a.suggestedColors;
+  // Drawings get their own palette and sampling: outlines, faces and pale bodies survive small grids.
+  const algorithm = graphic ? 'fills' : 'kmeans';
+  const sampling = graphic ? 'drawing' : 'dominant';
   const common: ConvertParams = {
     ...base,
     source: 'pixelate',
@@ -33,9 +36,9 @@ export function presetsFor(a: ImageAnalysis, base: ConvertParams): Preset[] {
       params: {
         ...common,
         width: 14,
-        colors: graphic ? clamp(sc, 2, 4) : 4,
-        algorithm: 'kmeans',
-        sampling: 'dominant',
+        colors: graphic ? clamp(sc, 2, 5) : 4,
+        algorithm,
+        sampling,
         smoothing: 1,
         saturation: 15,
         contrast: 10,
@@ -46,9 +49,10 @@ export function presetsFor(a: ImageAnalysis, base: ConvertParams): Preset[] {
       params: {
         ...common,
         width: 20,
-        colors: graphic ? clamp(sc, 2, 6) : 6,
-        algorithm: 'kmeans',
-        sampling: 'dominant',
+        // One spare colour for drawings: cheeks, a tongue, the stroke round a pale body.
+        colors: graphic ? clamp(sc + 1, 2, 7) : 6,
+        algorithm,
+        sampling,
         smoothing: 1,
         saturation: graphic ? 0 : 10,
       },
@@ -59,8 +63,8 @@ export function presetsFor(a: ImageAnalysis, base: ConvertParams): Preset[] {
         ...common,
         width: 32,
         colors: graphic ? clamp(sc + 2, 3, 10) : clamp(sc + 2, 8, 10),
-        algorithm: graphic ? 'median-cut' : 'kmeans',
-        sampling: graphic ? 'dominant' : 'average',
+        algorithm,
+        sampling: graphic ? 'drawing' : 'average',
         smoothing: 1,
         saturation: graphic ? 0 : 10,
       },
@@ -72,7 +76,7 @@ export function presetsFor(a: ImageAnalysis, base: ConvertParams): Preset[] {
         width: 24,
         colors: graphic ? clamp(sc + 1, 2, 8) : 6,
         algorithm: 'crayon',
-        sampling: 'dominant',
+        sampling,
         smoothing: 1,
         saturation: 10,
       },
@@ -83,8 +87,9 @@ export function presetsFor(a: ImageAnalysis, base: ConvertParams): Preset[] {
         ...common,
         width: 18,
         colors: graphic ? clamp(sc, 2, 5) : 5,
-        algorithm: 'posterize',
-        sampling: 'dominant',
+        // Posterising keeps only the most used levels, which costs a drawing its eyes and cheeks.
+        algorithm: graphic ? 'fills' : 'posterize',
+        sampling,
         smoothing: 1,
         saturation: 30,
         contrast: 20,
@@ -119,8 +124,8 @@ export function presetsFor(a: ImageAnalysis, base: ConvertParams): Preset[] {
         crop: 'full',
         width: 28,
         colors: graphic ? clamp(sc + 1, 2, 10) : 8,
-        algorithm: 'kmeans',
-        sampling: 'dominant',
+        algorithm,
+        sampling,
         smoothing: 1,
         saturation: graphic ? 0 : 10,
       },

@@ -1,5 +1,6 @@
 // Photo page flow with the image core mocked: pick → layouts → fine-tune → create.
-// A file whose name contains "sheet" loads as a 1000×600 "worksheet" with two detected grids.
+// A file whose name contains "sheet" loads as a 1000×600 "worksheet" with two detected grids; one with
+// "characters" as a 90×60 page of three drawings.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
@@ -14,11 +15,35 @@ import PhotoPage from './PhotoPage';
 
 vi.mock('../core/image/load', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../core/image/load')>()),
-  loadImageFile: vi.fn(async (file: File) => {
+  loadImageFile: vi.fn(async (file: File, _maxSide?: number, region?: { w: number }) => {
     if (file.name.includes('broken')) throw new Error('unsupported');
+    if (file.name.includes('gone') && region) throw new Error('unsupported');
+    if (region) return { width: 40, height: 40, data: new Uint8ClampedArray(40 * 40 * 4).fill(255) };
+    if (file.name.includes('characters') || file.name.includes('worksheet_art')) {
+      return { width: 90, height: 60, data: new Uint8ClampedArray(90 * 60 * 4).fill(255) };
+    }
     if (file.name.includes('sheet')) return { width: 1000, height: 600, data: new Uint8ClampedArray(0) };
     return { width: 4, height: 4, data: new Uint8ClampedArray(64) };
   }),
+}));
+
+vi.mock('../core/image/figures', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../core/image/figures')>()),
+  findFigures: vi.fn((image: ImageAnalysis['image']) =>
+    image.width === 90 || image.width === 1000
+      ? {
+          width: image.width,
+          height: image.height,
+          paper: [255, 255, 255, 255],
+          figures: [0, 1, 2].map((i) => ({
+            // On the worksheet these are its title's and its panels' bits.
+            box:
+              image.width === 90 ? { x: i * 30, y: 10, w: 20, h: 40 } : { x: 100 + i * 300, y: 100, w: 200, h: 400 },
+            keep: new Uint8Array(image.width === 90 ? 800 : 80000).fill(1),
+          })),
+        }
+      : null,
+  ),
 }));
 
 vi.mock('../core/image/pipeline', async (importOriginal) => {
@@ -254,6 +279,55 @@ describe('PhotoPage', () => {
     await click(container.querySelector('.photo-create-button'));
     await waitFor(() => container.querySelector('.editor-stub') !== null);
     expect(text()).toContain('EDITOR Animals sheet 10x12');
+  });
+
+  it('lets one drawing of a sheet be picked, cut from the original file', async () => {
+    await chooseFile(new File(['x'], 'my_characters.png', { type: 'image/png' }));
+    await waitFor(() => container.querySelectorAll('.photo-figure').length === 3);
+    expect(text()).toContain(t('photo.figuresTitle', { count: 3 }));
+    expect(container.querySelectorAll('.photo-sheet-box')).toHaveLength(3);
+    expect(container.querySelector('.photo-preset')).toBeNull();
+
+    await click(container.querySelectorAll('.photo-figure')[1]);
+    await waitFor(() => container.querySelectorAll('.photo-preset').length === 2);
+    const [, side, region] = vi.mocked(loadImageFile).mock.calls.at(-1)!;
+    expect(side).toBe(SOURCE_SIZE);
+    expect(region!.x).toBeCloseTo(1 / 3);
+    expect(region!.w).toBeCloseTo(2 / 9);
+
+    await click(container.querySelector('.photo-preset'));
+    expect(container.querySelector<HTMLInputElement>('.photo-create input[type="text"]')?.value).toBe('My characters 2');
+
+    // Tuner → layouts → the sheet, with focus back on the drawing that was picked.
+    await click([...container.querySelectorAll('button')].find((b) => b.textContent === t('photo.backToLayouts')));
+    await click(container.querySelector('.photo-another-figure'));
+    const picked = container.querySelectorAll('.photo-figure')[1];
+    expect(picked.classList.contains('picked')).toBe(true);
+    expect(document.activeElement).toBe(picked);
+  });
+
+  it('can take a whole sheet, and go back to its drawings', async () => {
+    await chooseFile(new File(['x'], 'characters.png', { type: 'image/png' }));
+    await waitFor(() => container.querySelector('.photo-use-whole') !== null);
+    await click(container.querySelector('.photo-use-whole'));
+    await waitFor(() => container.querySelectorAll('.photo-preset').length === 2);
+    await click(container.querySelector('.photo-another-figure'));
+    expect(container.querySelectorAll('.photo-figure')).toHaveLength(3);
+  });
+
+  it('still works when the file can no longer be read for the cut-out', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await chooseFile(new File(['x'], 'gone_characters.png', { type: 'image/png' }));
+    await waitFor(() => container.querySelectorAll('.photo-figure').length === 3);
+    await click(container.querySelector('.photo-figure'));
+    await waitFor(() => container.querySelectorAll('.photo-preset').length === 2);
+  });
+
+  it('opens a worksheet on its grids, not on the picker', async () => {
+    await chooseFile(new File(['x'], 'animals_sheet.png', { type: 'image/png' }));
+    await waitFor(() => container.querySelectorAll('.photo-preset').length === 4);
+    expect(container.querySelector('.photo-figure')).toBeNull();
+    expect(container.querySelector('.photo-another-figure')).toBeNull();
   });
 
   it('takes a pasted picture', async () => {

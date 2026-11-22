@@ -1,7 +1,9 @@
+import { NAME_MAX } from '../../core/types';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS } from '../../core/image/pipeline';
 import { t } from '../../i18n';
 import {
+  figureName,
   boxPercent,
   clampParams,
   dragHasFiles,
@@ -138,5 +140,14 @@ describe('subject box', () => {
   it('tells when the box is the whole image', () => {
     expect(isWholeImage({ image, subjectBox: { x: 0, y: 0, w: 200, h: 100 } })).toBe(true);
     expect(isWholeImage({ image, subjectBox: { x: 10, y: 10, w: 100, h: 50 } })).toBe(false);
+  });
+});
+
+describe('figureName', () => {
+  it("numbers a sheet's drawing and keeps the number when the name is long", () => {
+    expect(figureName('My characters', 7)).toBe('My characters 7');
+    const long = figureName('x'.repeat(NAME_MAX), 151);
+    expect(long).toHaveLength(NAME_MAX);
+    expect(long.endsWith(' 151')).toBe(true);
   });
 });

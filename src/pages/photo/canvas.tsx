@@ -57,8 +57,16 @@ export function ConversionCanvas({ conversion, gridLines, label }: { conversion:
   return <canvas ref={ref} className="photo-preview-canvas" width={w} height={h} role="img" aria-label={label} />;
 }
 
-/** The analysed (downscaled) photo, drawn pixel for pixel. */
-export function ImageCanvas({ image, label }: { image: RgbaImage; label: string }) {
+/** An image (the analysed photo, a sheet, a figure), drawn pixel for pixel. */
+export function ImageCanvas({
+  image,
+  label,
+  className = 'photo-original-canvas',
+}: {
+  image: RgbaImage;
+  label: string;
+  className?: string;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -69,5 +77,5 @@ export function ImageCanvas({ image, label }: { image: RgbaImage; label: string 
     ctx.putImageData(data, 0, 0);
   }, [image]);
 
-  return <canvas ref={ref} className="photo-original-canvas" width={image.width} height={image.height} role="img" aria-label={label} />;
+  return <canvas ref={ref} className={className} width={image.width} height={image.height} role="img" aria-label={label} />;
 }

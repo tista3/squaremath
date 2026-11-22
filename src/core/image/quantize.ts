@@ -69,12 +69,12 @@ function finish(pts: Points, labels: Int32Array, k: number): Quantized {
 // ---------------------------------------------------------------------------------------------
 // k-means (k-means++ seeding, a few deterministic restarts, best SSE wins)
 
-export function kmeans(pts: Points, k: number, seed = 1): Quantized {
+export function kmeans(pts: Points, k: number, seed = 1, attempts = 3, iterations = 40): Quantized {
   const n = pts.count;
   k = Math.min(k, n);
   if (k <= 0) return { centres: [], labels: new Int32Array(0) };
   let best: { labels: Int32Array; sse: number } | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     const rng = createRng(mixSeed(seed, attempt, n, k));
     const centres = new Float64Array(k * 3);
     const dmin = new Float64Array(n).fill(Infinity);
@@ -97,7 +97,7 @@ export function kmeans(pts: Points, k: number, seed = 1): Quantized {
       pick = pickWeighted(probs, sum, rng.next());
     }
     const labels = new Int32Array(n);
-    for (let iter = 0; iter < 40; iter++) {
+    for (let iter = 0; iter < iterations; iter++) {
       let changed = 0;
       for (let i = 0; i < n; i++) {
         const c = nearest(pts.lab, i, centres, kk);
@@ -140,6 +140,85 @@ function pickWeighted(weights: ArrayLike<number>, total: number, r: number): num
   }
   for (let i = weights.length - 1; i >= 0; i--) if (weights[i] > 0) return i;
   return 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fills: over-segment, then merge (a palette for drawn art)
+
+/** Colours the merge starts from. */
+const FILL_SEEDS = 24;
+/** Lab grid on which the points are pooled before seeding (speed only). */
+const FILL_POOL = 4;
+/** Lightness counts this much when merging, so two shades of one fill merge before two hues do. */
+const FILL_LIGHTNESS = 0.8;
+/** Softened Ward size term (1 = plain Ward): small but distinct accents keep their colour. */
+const FILL_SIZE_POWER = 0.65;
+const FILL_REFINE = 3;
+
+export function fills(pts: Points, k: number): Quantized {
+  if (pts.count === 0 || k <= 0) return { centres: [], labels: new Int32Array(pts.count) };
+  const pool = new Map<number, number[]>();
+  for (let i = 0; i < pts.count; i++) {
+    const at = (a: number) => Math.floor(pts.lab[i * 3 + a] / FILL_POOL) + 100;
+    const key = at(0) * 40000 + at(1) * 200 + at(2);
+    let p = pool.get(key);
+    if (!p) pool.set(key, (p = [0, 0, 0, 0]));
+    for (let a = 0; a < 3; a++) p[a] += pts.lab[i * 3 + a] * pts.weight[i];
+    p[3] += pts.weight[i];
+  }
+  const pooled = [...pool.values()];
+  const seeds = kmeans(
+    {
+      lab: Float64Array.from(pooled.flatMap(([l, a, b, w]) => [l / w, a / w, b / w])),
+      weight: Float64Array.from(pooled, (p) => p[3]),
+      count: pooled.length,
+    },
+    FILL_SEEDS,
+    0x5eed,
+    // Only seeds for the merge: one quick run is as good as several exact ones.
+    1,
+    8,
+  );
+  const c = Float64Array.from(seeds.centres);
+  const n = c.length / 3;
+  const weight = new Float64Array(n);
+  pooled.forEach((p, i) => (weight[seeds.labels[i]] += p[3]));
+  let total = 0;
+  for (const w of weight) total += w;
+
+  const alive = new Array<boolean>(n).fill(true);
+  for (let left = n; left > k; left--) {
+    let bi = 0, bj = 0, best = Infinity;
+    for (let i = 0; i < n; i++) {
+      if (!alive[i]) continue;
+      for (let j = i + 1; j < n; j++) {
+        if (!alive[j]) continue;
+        const dl = (c[i * 3] - c[j * 3]) * FILL_LIGHTNESS, da = c[i * 3 + 1] - c[j * 3 + 1], db = c[i * 3 + 2] - c[j * 3 + 2];
+        const size = (weight[i] * weight[j]) / (weight[i] + weight[j]) / total;
+        const cost = (dl * dl + da * da + db * db) * size ** FILL_SIZE_POWER;
+        if (cost < best) {
+          best = cost;
+          bi = i;
+          bj = j;
+        }
+      }
+    }
+    const wi = weight[bi], wj = weight[bj];
+    for (let a = 0; a < 3; a++) c[bi * 3 + a] = (c[bi * 3 + a] * wi + c[bj * 3 + a] * wj) / (wi + wj);
+    weight[bi] = wi + wj;
+    alive[bj] = false;
+  }
+
+  // A few k-means steps on the real points make the merged colours representative.
+  let centres = Array.from(c).filter((_, i) => alive[Math.floor(i / 3)]);
+  let result: Quantized = { centres, labels: new Int32Array(pts.count) };
+  for (let step = 0; step < FILL_REFINE; step++) {
+    const labels = new Int32Array(pts.count);
+    for (let i = 0; i < pts.count; i++) labels[i] = nearest(pts.lab, i, centres, centres.length / 3);
+    result = finish(pts, labels, centres.length / 3);
+    centres = result.centres;
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------------------------

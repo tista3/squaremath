@@ -1,6 +1,7 @@
 // OWNER: photo-ui agent. Step 3: live preview + all conversion parameters, name and "Create design".
 import { useId, useState, type FormEvent } from 'react';
 import {
+  CELL_SAMPLINGS,
   COLOR_ALGORITHMS,
   CROP_MODES,
   PARAM_LIMITS,
@@ -20,7 +21,6 @@ import { clampParams, sameParams, signedPercent } from './helpers';
 import type { PhotoSource, PresetView } from './prepare';
 import { useLiveConversion } from './useLiveConversion';
 
-const SAMPLINGS: CellSampling[] = ['dominant', 'average'];
 const SMOOTHING_LEVELS = Array.from({ length: PARAM_LIMITS.smoothing.max - PARAM_LIMITS.smoothing.min + 1 }, (_, i) =>
   String(PARAM_LIMITS.smoothing.min + i),
 );
@@ -174,7 +174,7 @@ export function PhotoTuner({
                 <Segmented<CellSampling>
                   label={t('photo.sampling')}
                   value={params.sampling}
-                  options={SAMPLINGS.map((s) => ({ value: s, label: t(`photo.sampling_${s}`), title: t(`photo.samplingHint_${s}`) }))}
+                  options={CELL_SAMPLINGS.map((s) => ({ value: s, label: t(`photo.sampling_${s}`), title: t(`photo.samplingHint_${s}`) }))}
                   onChange={(v) => set('sampling', v)}
                 />
               </Field>

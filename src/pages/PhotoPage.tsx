@@ -1,4 +1,4 @@
-// OWNER: photo-ui agent. "Make a design from a photo": pick → automatic analysis + layouts → fine-tune → create.
+// OWNER: photo-ui agent. "Make a design from a photo": pick → (one figure of a sheet) → layouts → fine-tune → create.
 // Everything happens in this tab: the photo is decoded and converted locally and never uploaded or stored.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,17 +10,34 @@ import { t } from '../i18n';
 import { routes } from '../routes';
 import { useDesignStore } from '../state/store';
 import { dragHasFiles, pickFile } from './photo/helpers';
+import { PhotoFigures } from './photo/PhotoFigures';
 import { PhotoLayouts } from './photo/PhotoLayouts';
 import { PhotoPicker } from './photo/PhotoPicker';
 import { PhotoTuner } from './photo/PhotoTuner';
-import { PhotoError, preparePhoto, type PhotoErrorCode, type PhotoSource, type PresetView } from './photo/prepare';
+import {
+  PhotoError,
+  prepareFigure,
+  preparePhoto,
+  prepareWholeSheet,
+  type PhotoErrorCode,
+  type PhotoSheet,
+  type PhotoSource,
+  type PresetView,
+} from './photo/prepare';
 import './PhotoPage.css';
+
+/** The sheet a picture was picked from, and which figure it was (none: the whole sheet). */
+interface Origin {
+  sheet: PhotoSheet;
+  picked?: number;
+}
 
 type Stage =
   | { step: 'pick'; error?: PhotoErrorCode }
   | { step: 'loading' }
-  | { step: 'layouts'; source: PhotoSource }
-  | { step: 'tune'; source: PhotoSource; view: PresetView };
+  | ({ step: 'figures' } & Origin)
+  | { step: 'layouts'; source: PhotoSource; origin?: Origin }
+  | { step: 'tune'; source: PhotoSource; view: PresetView; origin?: Origin };
 
 const ERROR_TEXT: Record<PhotoErrorCode, string> = {
   notImage: 'photo.errorNotImage',
@@ -37,23 +54,47 @@ export default function PhotoPage() {
   const store = useDesignStore();
   const toast = useToast();
   const navigate = useNavigate();
-  const acceptsFiles = stage.step === 'pick' || stage.step === 'layouts';
+  const acceptsFiles = stage.step === 'pick' || stage.step === 'figures' || stage.step === 'layouts';
 
   const loadFile = useCallback(async (file: File) => {
     const token = ++loadToken.current;
     const isStale = () => loadToken.current !== token;
     setStage({ step: 'loading' });
     try {
-      const source = await preparePhoto(file, t('photo.defaultName'), isStale);
-      if (!source || isStale()) return;
-      setName(source.name);
-      setStage({ step: 'layouts', source });
+      const prepared = await preparePhoto(file, t('photo.defaultName'), isStale);
+      if (!prepared || isStale()) return;
+      if ('sheet' in prepared) {
+        setStage({ step: 'figures', sheet: prepared.sheet });
+      } else {
+        setName(prepared.source.name);
+        setStage({ step: 'layouts', source: prepared.source });
+      }
     } catch (error) {
       if (isStale()) return;
       if (!(error instanceof PhotoError)) console.error(error);
       setStage({ step: 'pick', error: error instanceof PhotoError ? error.code : 'analyse' });
     }
   }, []);
+
+  /** Layouts for one figure of a sheet, or for the whole sheet (`picked` undefined). */
+  const pickFromSheet = async (origin: Origin) => {
+    const token = ++loadToken.current;
+    const isStale = () => loadToken.current !== token;
+    const { sheet, picked } = origin;
+    setStage({ step: 'loading' });
+    try {
+      const source = await (picked === undefined ? prepareWholeSheet(sheet, isStale) : prepareFigure(sheet, picked, isStale));
+      if (!source || isStale()) return;
+      setName(source.name);
+      setStage({ step: 'layouts', source, origin });
+    } catch (error) {
+      if (isStale()) return;
+      if (!(error instanceof PhotoError)) console.error(error);
+      // The other figures may well work: stay on the sheet.
+      toast(t(ERROR_TEXT[error instanceof PhotoError ? error.code : 'analyse']), 'error');
+      setStage({ step: 'figures', ...origin });
+    }
+  };
 
   // Stop a load still in progress when leaving the page.
   useEffect(() => () => void ++loadToken.current, []);
@@ -112,6 +153,7 @@ export default function PhotoPage() {
   }, [acceptsFiles, loadFile]);
 
   // After a step change, start at the top and move focus to the new step's heading (keyboard / screen readers).
+  // Back on a sheet: to the figure that was picked, as there can be a hundred and more.
   const firstStep = useRef(true);
   useEffect(() => {
     if (firstStep.current) {
@@ -120,7 +162,9 @@ export default function PhotoPage() {
     }
     if (stage.step === 'loading') return;
     window.scrollTo(0, 0);
-    pageRef.current?.querySelector<HTMLElement>('[data-step-heading]')?.focus({ preventScroll: true });
+    const picked = pageRef.current?.querySelector<HTMLElement>('[data-step-focus]');
+    picked?.scrollIntoView?.({ block: 'center' });
+    (picked ?? pageRef.current?.querySelector<HTMLElement>('[data-step-heading]'))?.focus({ preventScroll: true });
   }, [stage]);
 
   const create = (conversion: Conversion) => {
@@ -170,20 +214,30 @@ export default function PhotoPage() {
         </div>
       )}
 
+      {dragActive && (stage.step === 'figures' || stage.step === 'layouts') && (
+        <p className="photo-drop-banner" aria-hidden="true">
+          <Icon name="image" />
+          {t('photo.dropActive')}
+        </p>
+      )}
+
+      {stage.step === 'figures' && (
+        <PhotoFigures
+          sheet={stage.sheet}
+          lastPicked={stage.picked}
+          onPick={(picked) => void pickFromSheet({ sheet: stage.sheet, picked })}
+          onWhole={() => void pickFromSheet({ sheet: stage.sheet })}
+          onAnotherPhoto={() => setStage({ step: 'pick' })}
+        />
+      )}
+
       {stage.step === 'layouts' && (
-        <>
-          {dragActive && (
-            <p className="photo-drop-banner" aria-hidden="true">
-              <Icon name="image" />
-              {t('photo.dropActive')}
-            </p>
-          )}
-          <PhotoLayouts
-            source={stage.source}
-            onPick={(view) => setStage({ step: 'tune', source: stage.source, view })}
-            onAnotherPhoto={() => setStage({ step: 'pick' })}
-          />
-        </>
+        <PhotoLayouts
+          source={stage.source}
+          onPick={(view) => setStage({ step: 'tune', source: stage.source, view, origin: stage.origin })}
+          onAnotherPhoto={() => setStage({ step: 'pick' })}
+          onAnotherFigure={stage.origin && (() => setStage({ step: 'figures', ...stage.origin! }))}
+        />
       )}
 
       {stage.step === 'tune' && (
@@ -193,7 +247,7 @@ export default function PhotoPage() {
           view={stage.view}
           name={name}
           onNameChange={setName}
-          onBack={() => setStage({ step: 'layouts', source: stage.source })}
+          onBack={() => setStage({ step: 'layouts', source: stage.source, origin: stage.origin })}
           onCreate={create}
         />
       )}

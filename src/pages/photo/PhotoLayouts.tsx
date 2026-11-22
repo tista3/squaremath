@@ -9,14 +9,17 @@ export function PhotoLayouts({
   source,
   onPick,
   onAnotherPhoto,
+  onAnotherFigure,
 }: {
   source: PhotoSource;
   onPick: (view: PresetView) => void;
   onAnotherPhoto: () => void;
+  /** Given when the picture came from a sheet of several drawings. */
+  onAnotherFigure?: () => void;
 }) {
   return (
     <>
-      <AnalysisPanel source={source} onAnotherPhoto={onAnotherPhoto} />
+      <AnalysisPanel source={source} onAnotherPhoto={onAnotherPhoto} onAnotherFigure={onAnotherFigure} />
       <section className="stack" aria-labelledby="photo-layouts-title">
         <h2 id="photo-layouts-title" tabIndex={-1} data-step-heading>
           {t('photo.layoutsTitle')}
@@ -34,7 +37,15 @@ export function PhotoLayouts({
   );
 }
 
-function AnalysisPanel({ source, onAnotherPhoto }: { source: PhotoSource; onAnotherPhoto: () => void }) {
+function AnalysisPanel({
+  source,
+  onAnotherPhoto,
+  onAnotherFigure,
+}: {
+  source: PhotoSource;
+  onAnotherPhoto: () => void;
+  onAnotherFigure?: () => void;
+}) {
   const { analysis, sourceSize } = source;
   const { background, kind, grids } = analysis;
   const box = subjectBoxPercent(analysis);
@@ -114,6 +125,12 @@ function AnalysisPanel({ source, onAnotherPhoto }: { source: PhotoSource; onAnot
         {showBox && <p className="muted photo-note">{t('photo.subjectNote')}</p>}
         {grids.length > 0 && <p className="muted photo-note">{t(numbered ? 'photo.gridsNote' : 'photo.gridNote')}</p>}
         <div className="toolbar">
+          {onAnotherFigure && (
+            <button type="button" className="btn photo-another-figure" onClick={onAnotherFigure}>
+              <Icon name="back" />
+              {t('photo.anotherFigure')}
+            </button>
+          )}
           <button type="button" className="btn" onClick={onAnotherPhoto}>
             <Icon name="refresh" />
             {t('photo.anotherPhoto')}

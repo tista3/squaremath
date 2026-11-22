@@ -39,6 +39,12 @@ const CELL_INSET = 0.22;
 const MERGE_DE = 7;
 /** Share of lattice lines that must be present on each axis. */
 const MIN_COVERAGE = 0.9;
+/** A real grid's boundaries carry a line along this share of their length... */
+const MIN_DRAWN_BOUNDARY = 0.7;
+/** ...or, without drawn lines (pixel art), an edge along this share of those between different colours. */
+const MIN_COLOUR_BOUNDARY = 0.9;
+/** Neighbouring cells differ in colour from this channel difference. */
+const CELL_DIFFERENT = 60;
 /** Grids below this confidence are not reported. */
 export const MIN_GRID_CONFIDENCE = 0.5;
 
@@ -487,6 +493,54 @@ function mergeColours(cells: [number, number, number][]): string[] {
   return cells.map((c) => hexOf.get(c.join(','))!);
 }
 
+/**
+ * Are the boundaries between the cells really in the picture? Shapes that happen to line up (the figures and
+ * captions of a character sheet, a drawing's stripes) put evidence on lattice lines only here and there.
+ */
+function hasCellBoundaries(p: Planes, cols: Axis, rows: Axis, colours: [number, number, number][]): boolean {
+  const nc = cols.lines.length - 1;
+  let all = 0;
+  let allOn = 0;
+  let between = 0;
+  let betweenOn = 0;
+  for (const axis of ['v', 'h'] as const) {
+    const vertical = axis === 'v';
+    const across = vertical ? cols.lines : rows.lines;
+    const along = vertical ? rows.lines : cols.lines;
+    const ev = vertical ? p.ev : p.eh;
+    for (let i = 0; i < across.length; i++) {
+      const at = Math.round(across[i]);
+      for (let j = 0; j + 1 < along.length; j++) {
+        // One segment: cell corners excluded.
+        let on = 0;
+        let length = 0;
+        for (let t = Math.round(along[j]) + 1; t < Math.round(along[j + 1]); t++) {
+          length++;
+          for (let o = -1; o <= 1; o++) {
+            const x = vertical ? at + o : t;
+            const y = vertical ? t : at + o;
+            if (x >= 0 && y >= 0 && x < p.w && y < p.h && ev[y * p.w + x]) {
+              on++;
+              break;
+            }
+          }
+        }
+        if (length === 0) continue;
+        const share = on / length;
+        all++;
+        allOn += share;
+        if (i === 0 || i === across.length - 1) continue;
+        const a = colours[vertical ? j * nc + i : i * nc + j];
+        const b = colours[vertical ? j * nc + i - 1 : (i - 1) * nc + j];
+        if (Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2])) < CELL_DIFFERENT) continue;
+        between++;
+        betweenOn += share;
+      }
+    }
+  }
+  return allOn >= all * MIN_DRAWN_BOUNDARY || (between > 0 && betweenOn >= between * MIN_COLOUR_BOUNDARY);
+}
+
 function readGrid(p: Planes, cols: Axis, rows: Axis): DetectedGrid | null {
   const nc = cols.lines.length - 1;
   const nr = rows.lines.length - 1;
@@ -512,6 +566,7 @@ function readGrid(p: Planes, cols: Axis, rows: Axis): DetectedGrid | null {
       flat += cell.flat;
     }
   }
+  if (!hasCellBoundaries(p, cols, rows, raw)) return null;
   flat /= nc * nr;
   const regular = Math.max(0, 1 - 4 * Math.max(cols.residual, rows.residual));
   const confidence = Math.max(0, Math.min(1, cols.coverage * rows.coverage * regular * Math.min(1, flat / 0.85)));

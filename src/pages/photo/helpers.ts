@@ -48,6 +48,12 @@ export function nameFromFileName(fileName: string, fallback: string): string {
   return (words[0].toUpperCase() + words.slice(1)).slice(0, NAME_MAX).trim();
 }
 
+/** The suggested name of figure number `n` of a sheet: the sheet's name, shortened to leave room for the number. */
+export function figureName(sheetName: string, n: number): string {
+  const suffix = ` ${n}`;
+  return sheetName.slice(0, NAME_MAX - suffix.length).trim() + suffix;
+}
+
 /** True for files the browser says are images (a missing type is allowed: the decoder decides). */
 export function looksLikeImage(file: Pick<File, 'type' | 'name'>): boolean {
   if (file.type) return file.type.startsWith('image/');

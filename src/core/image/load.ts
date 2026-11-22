@@ -1,6 +1,6 @@
 // OWNER: image-core agent. Browser-only: decode an image file into pixels.
 import { WORKING_SIZE } from './types';
-import type { RgbaImage } from './types';
+import type { CropBox, RgbaImage } from './types';
 
 /** Accepted file types for the photo picker (input accept attribute). */
 export const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/bmp';
@@ -24,14 +24,30 @@ function makeCanvas(w: number, h: number): { ctx: Ctx } | null {
 
 /**
  * Decode a JPG/PNG/WebP/GIF/BMP file (EXIF orientation applied) and downscale so the long side is ≤ maxSide.
+ * With `region` (shares 0..1 of the oriented picture) only that part is loaded, from the original pixels: a
+ * small figure on a big sheet keeps all its detail.
  * Rejects with Error('unsupported') for non-images / undecodable files.
  */
-export async function loadImageFile(file: Blob, maxSide: number = WORKING_SIZE): Promise<RgbaImage> {
+export async function loadImageFile(file: Blob, maxSide: number = WORKING_SIZE, region?: CropBox): Promise<RgbaImage> {
   if (typeof createImageBitmap !== 'function') throw new Error('unsupported');
   let bitmap: ImageBitmap | null = null;
   const steps: ImageBitmap[] = [];
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    if (region) {
+      const { width: fw, height: fh } = bitmap;
+      const x = Math.min(fw - 1, Math.max(0, Math.round(region.x * fw)));
+      const y = Math.min(fh - 1, Math.max(0, Math.round(region.y * fh)));
+      const part = await createImageBitmap(
+        bitmap,
+        x,
+        y,
+        Math.min(fw - x, Math.max(1, Math.round(region.w * fw))),
+        Math.min(fh - y, Math.max(1, Math.round(region.h * fh))),
+      );
+      bitmap.close();
+      bitmap = part;
+    }
     const sw = bitmap.width;
     const sh = bitmap.height;
     if (!(sw > 0 && sh > 0)) throw new Error('unsupported');

@@ -1,6 +1,7 @@
 // OWNER: image-core agent. Working copy, per-image caches, background estimate and subject mask.
 import { SRGB_TO_LINEAR, labToHex, linearToLab, hexToLab } from './color';
 import { WORKING_SIZE } from './types';
+import { drawingMask, hasCleanPaper, hasEvenPaper, looksDrawn } from './drawing';
 import type { ImageAnalysis, RgbaImage } from './types';
 
 /** Default background tolerance (keep in sync with DEFAULT_PARAMS.backgroundTolerance). */
@@ -13,6 +14,10 @@ const BORDER_SHARE = 0.6;
 const BORDER_RADIUS = 14;
 /** Subjects smaller than this share of the image are ignored (no usable background/subject split). */
 const MIN_SUBJECT_SHARE = 0.02;
+/** ...but on drawing paper much less is enough (line art is mostly paper). */
+const MIN_DRAWN_SHARE = 0.004;
+/** Share of a drawing's pixels trimmed from each side of its box (specks), keeping antennae and tails. */
+const DRAWN_TRIM = 0.0005;
 /** Background rejected as textured when more than this share of it was reached only by following drift… */
 const MAX_DRIFT_SHARE = 0.08;
 /** …and the largest subject piece holds less than this share of the subject. */
@@ -465,6 +470,14 @@ export function analyze(input: RgbaImage): Omit<ImageAnalysis, 'grids'> {
   let background = estimateBackground(d);
   let subjectBox = full;
   let mask: Uint8Array | null = null;
+  if (background && hasCleanPaper(d, background)) {
+    // Tried first: the photo mask below eats pale drawings, and would then reject their background.
+    const drawn = drawnSubject(d, background);
+    if (drawn && looksDrawn(d, drawn.mask)) {
+      const { suggestedColors } = colourComplexity(d, drawn.mask, 'graphic');
+      return { image, background, subjectBox: drawn.box, kind: 'graphic', suggestedColors };
+    }
+  }
   if (background) {
     mask = backgroundMask(d, background, DEFAULT_TOLERANCE);
     const stats = maskStats(d, background, DEFAULT_TOLERANCE);
@@ -481,15 +494,33 @@ export function analyze(input: RgbaImage): Omit<ImageAnalysis, 'grids'> {
     }
   }
   const { kind, suggestedColors } = colourComplexity(d, mask);
+  if (kind === 'graphic' && background && hasEvenPaper(d, background)) {
+    subjectBox = drawnSubject(d, background)?.box ?? subjectBox;
+  }
   return { image, background, subjectBox, kind, suggestedColors };
+}
+
+/** The subject by the strict drawing mask, or null when there is next to nothing on the paper. */
+function drawnSubject(d: Derived, background: string): { mask: Uint8Array; box: ImageAnalysis['subjectBox'] } | null {
+  const mask = drawingMask(d, background, DEFAULT_TOLERANCE);
+  let subject = 0;
+  for (const m of mask) if (!m) subject++;
+  if (subject < d.n * MIN_DRAWN_SHARE) return null;
+  const box = maskBox(mask, d.w, d.h, DRAWN_TRIM);
+  return box && { mask, box };
 }
 
 /**
  * Photo vs graphic and a colour count, from the subject pixels (all pixels without a background):
  * 'graphic' when ≥ 80 % of them fall into the 24 biggest 16-level colour bins AND at most 35 % of them
  * lie on soft shading (a small but non-zero local gradient) — flat colours with sharp edges.
+ * `known` skips that test (drawn art that looksDrawn() recognised).
  */
-function colourComplexity(d: Derived, mask: Uint8Array | null): { kind: 'graphic' | 'photo'; suggestedColors: number } {
+function colourComplexity(
+  d: Derived,
+  mask: Uint8Array | null,
+  known?: 'graphic',
+): { kind: 'graphic' | 'photo'; suggestedColors: number } {
   const fine = new Int32Array(4096);
   const coarse = new Int32Array(512);
   const { w, h } = d;
@@ -516,7 +547,7 @@ function colourComplexity(d: Derived, mask: Uint8Array | null): { kind: 'graphic
   const sorted = Array.from(fine).sort((a, b) => b - a);
   let top = 0;
   for (let i = 0; i < 24; i++) top += sorted[i];
-  const kind = top >= count * 0.8 && soft <= measured * 0.35 ? 'graphic' : 'photo';
+  const kind = known ?? (top >= count * 0.8 && soft <= measured * 0.35 ? 'graphic' : 'photo');
   // Colours: 8-level bins holding a noticeable share that are not just a shade next to a bigger one
   // (antialiasing, JPEG noise, gentle shading).
   const minShare = kind === 'graphic' ? 0.015 : 0.03;

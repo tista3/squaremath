@@ -11,6 +11,7 @@ import {
   drawnSun,
   noise,
   noisySubject,
+  paint,
   photoGradient,
   redCircle,
   ringWithHole,
@@ -43,6 +44,19 @@ function expectCells(g: DetectedGrid, art: string[], colors: Record<string, Rgb>
 const heartSpec = (extra: Partial<GridSpec> = {}): GridSpec => ({ ...HEART, cell: 14, x: 30, y: 40, text: true, ...extra });
 
 describe('detectGrids', () => {
+  it.each([
+    ['round figures', 20, (u: number, v: number) => u * u + v * v <= 0.48 ** 2],
+    ['crosses', 16, (u: number, v: number) => Math.min(Math.abs(u), Math.abs(v)) <= 0.14 && Math.max(Math.abs(u), Math.abs(v)) <= 0.42],
+  ] as const)('does not take %s lined up in rows (a character sheet) for a grid', (_, pitch, inside) => {
+    const count = 8;
+    const img = paint(blank(pitch * count + 40, pitch * count + 40, [255, 255, 255]), [40, 40, 50], (x, y) => {
+      const a = (x - 20) / pitch;
+      const b = (y - 20) / pitch;
+      return a >= 0 && b >= 0 && a < count && b < count && inside((a % 1) - 0.5, (b % 1) - 0.5);
+    });
+    expect(detectGrids(img)).toEqual([]);
+  });
+
   it('reads a worksheet grid exactly despite the printed sums, title and text', () => {
     const img = worksheet(300, 260, [heartSpec()]);
     const grids = detectGrids(img);

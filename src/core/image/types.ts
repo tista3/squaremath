@@ -8,23 +8,39 @@ export interface RgbaImage {
   data: Uint8ClampedArray;
 }
 
+/** A rectangle in an image's pixels. */
+export interface CropBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /**
  * How the picture's colours are chosen:
  * - 'kmeans': k-means clustering in CIELAB (k-means++ seeding, deterministic) — the most faithful colours.
+ * - 'fills': the palette for drawings: shades of one fill merge before different hues do, so small accents
+ *   (cheeks, eyes) keep their own colour.
  * - 'median-cut': median cut box splitting — fast, keeps small but distinct colours.
  * - 'crayon': each colour snapped to the nearest named crayon colour (TEMPLATE_COLORS), then the `colors`
  *   most used ones are kept — bright kid-friendly colours with exact English names.
  * - 'posterize': few levels per channel, then the most used `colors` — bold, poster-like.
  */
-export type ColorAlgorithm = 'kmeans' | 'median-cut' | 'crayon' | 'posterize';
-export const COLOR_ALGORITHMS: ColorAlgorithm[] = ['kmeans', 'median-cut', 'crayon', 'posterize'];
+export type ColorAlgorithm = 'kmeans' | 'fills' | 'median-cut' | 'crayon' | 'posterize';
+export const COLOR_ALGORITHMS: ColorAlgorithm[] = ['kmeans', 'fills', 'median-cut', 'crayon', 'posterize'];
 
 /** 'subject': crop to the detected subject (+ small margin); 'full': whole image; 'square': square around the subject. */
 export type CropMode = 'subject' | 'full' | 'square';
 export const CROP_MODES: CropMode[] = ['subject', 'full', 'square'];
 
-/** How one grid cell gets its colour from the pixels it covers: their mean, or the most common colour. */
-export type CellSampling = 'average' | 'dominant';
+/**
+ * How one grid cell gets its colour from the pixels it covers:
+ * - 'average': their mean;
+ * - 'dominant': the most common colour;
+ * - 'drawing': for drawn art, keeps outlines, eyes and other small features (see drawingCells.ts).
+ */
+export type CellSampling = 'average' | 'dominant' | 'drawing';
+export const CELL_SAMPLINGS: CellSampling[] = ['drawing', 'dominant', 'average'];
 
 export interface ConvertParams {
   /**
@@ -68,7 +84,7 @@ export interface ImageAnalysis {
   background: string | null;
   /** Bounding box of the subject in working-image pixels (the whole image when no background was found). */
   subjectBox: { x: number; y: number; w: number; h: number };
-  /** 'graphic' = few flat colours (drawing, clip art, logo); 'photo' = continuous tones. */
+  /** 'graphic' = drawn (cartoon, clip art, logo; may be softly shaded); 'photo' = continuous tones. */
   kind: 'graphic' | 'photo';
   /** Colour count that captures the image well (within PARAM_LIMITS.colors). */
   suggestedColors: number;

@@ -4,11 +4,13 @@ import { GRID_MAX, GRID_MIN, MAX_PALETTE } from '../types';
 import { backgroundMask, derive } from './analyze';
 import type { Derived } from './analyze';
 import { hexToLab, labToHex, labToRgbBytes, linearToLab, rgbBytesToLab } from './color';
+import { drawingMask, hasEvenPaper } from './drawing';
+import { drawingCells } from './drawingCells';
 import { uniqueColorNames } from './naming';
-import { crayon, kmeans, medianCut, posterize } from './quantize';
+import { crayon, fills, kmeans, medianCut, posterize } from './quantize';
 import type { Points, Quantized } from './quantize';
-import { PARAM_LIMITS } from './types';
-import type { Conversion, ConvertParams, CropMode, DetectedGrid, ImageAnalysis } from './types';
+import { CELL_SAMPLINGS, COLOR_ALGORITHMS, PARAM_LIMITS } from './types';
+import type { ColorAlgorithm, Conversion, ConvertParams, CropMode, DetectedGrid, ImageAnalysis } from './types';
 
 export interface Box {
   x: number;
@@ -19,6 +21,8 @@ export interface Box {
 
 /** Margin around the subject, as a share of its longer side. */
 const SUBJECT_MARGIN = 0.06;
+/** Margin around a drawing, in cells: every square counts for detail. */
+const DRAWING_MARGIN_CELLS = 0.5;
 /** Palette colours closer than this (CIE76) look the same and are merged (not for crayon colours). */
 const MERGE_DISTANCE = 5;
 /** A lonely cell this different (CIE76) from a uniform surrounding is a feature (an eye), not noise. */
@@ -77,8 +81,8 @@ export function sanitizeParams(p: ConvertParams): ConvertParams {
     gridIndex: clampInt(p.gridIndex, 0, 1000, 0),
     width: clampInt(p.width, GRID_MIN, GRID_MAX, 20),
     colors: clampInt(p.colors, L.colors.min, Math.min(L.colors.max, MAX_PALETTE - 1), 6),
-    algorithm: (['kmeans', 'median-cut', 'crayon', 'posterize'] as const).includes(p.algorithm) ? p.algorithm : 'kmeans',
-    sampling: p.sampling === 'average' ? 'average' : 'dominant',
+    algorithm: COLOR_ALGORITHMS.includes(p.algorithm) ? p.algorithm : 'kmeans',
+    sampling: CELL_SAMPLINGS.includes(p.sampling) ? p.sampling : 'dominant',
     removeBackground: p.removeBackground === true,
     backgroundTolerance: clampNum(p.backgroundTolerance, L.backgroundTolerance.min, L.backgroundTolerance.max, 30),
     crop: (['subject', 'full', 'square'] as const).includes(p.crop) ? p.crop : 'subject',
@@ -92,7 +96,7 @@ export function sanitizeParams(p: ConvertParams): ConvertParams {
 // Crop
 
 /** Crop rectangle (working-image pixels) for a crop mode, before fitting the grid's aspect limits. */
-export function cropBox(analysis: ImageAnalysis, mode: CropMode): Box {
+export function cropBox(analysis: ImageAnalysis, mode: CropMode, marginShare = SUBJECT_MARGIN): Box {
   const W = analysis.image.width;
   const H = analysis.image.height;
   if (mode === 'full') return { x: 0, y: 0, w: W, h: H };
@@ -100,7 +104,7 @@ export function cropBox(analysis: ImageAnalysis, mode: CropMode): Box {
   const x0 = clampInt(s.x, 0, W - 1, 0);
   const y0 = clampInt(s.y, 0, H - 1, 0);
   const box = { x: x0, y: y0, w: clampInt(s.w, 1, W - x0, W - x0), h: clampInt(s.h, 1, H - y0, H - y0) };
-  const m = Math.round(Math.max(box.w, box.h) * SUBJECT_MARGIN);
+  const m = Math.round(Math.max(box.w, box.h) * marginShare);
   if (mode === 'subject') {
     const x = Math.max(0, box.x - m);
     const y = Math.max(0, box.y - m);
@@ -140,11 +144,35 @@ export function convert(analysis: ImageAnalysis, rawParams: ConvertParams): Conv
   if (detected) return convertGrid(detected, params);
   const d = derive(analysis.image);
   const removing = params.removeBackground && analysis.background !== null;
-  const mask = removing ? backgroundMask(d, analysis.background!, params.backgroundTolerance) : null;
+  const bgHex = removing ? analysis.background : null;
+  const drawing = params.sampling === 'drawing';
+  // The strict drawing mask needs even paper; a gradient or vignette still needs the drift-following one.
+  const maskOf = drawing && bgHex && hasEvenPaper(d, bgHex) ? drawingMask : backgroundMask;
+  const mask = bgHex ? maskOf(d, bgHex, params.backgroundTolerance) : null;
 
   const cols = params.width;
-  const box = fitAspect(cropBox(analysis, params.crop), cols, d.w, d.h);
+  const margin = drawing ? DRAWING_MARGIN_CELLS / cols : SUBJECT_MARGIN;
+  const box = fitAspect(cropBox(analysis, params.crop, margin), cols, d.w, d.h);
   const rows = clampInt((cols * box.h) / box.w, GRID_MIN, GRID_MAX, cols);
+
+  if (drawing) {
+    const { grid, q } = drawingCells({
+      d,
+      mask,
+      bgHex,
+      box,
+      cols,
+      rows,
+      colors: params.colors,
+      smoothing: params.smoothing,
+      mayShift: params.crop !== 'full',
+      quantize: (points, k) => choosePalette(points, k, params.algorithm, removing),
+      adjust: (lab) => {
+        if (params.saturation || params.contrast) adjustAndSnap(lab, params.saturation, params.contrast);
+      },
+    });
+    return buildConversion(grid, cols, rows, q, removing);
+  }
 
   const cellLab = sampleCells(d, mask, box, cols, rows, params.sampling === 'average');
   adjustAndSnap(cellLab, params.saturation, params.contrast);
@@ -171,21 +199,7 @@ export function convert(analysis: ImageAnalysis, rawParams: ConvertParams): Conv
   }
   const pts: Points = { lab: Float64Array.from(labs), weight: Float64Array.from(weights), count: weights.length };
 
-  let q: Quantized;
-  switch (params.algorithm) {
-    case 'median-cut':
-      q = medianCut(pts, params.colors);
-      break;
-    case 'crayon':
-      q = crayon(pts, params.colors, removing);
-      break;
-    case 'posterize':
-      q = posterize(pts, params.colors);
-      break;
-    default:
-      q = kmeans(pts, params.colors, 0x5eed);
-  }
-  if (!q.fixed) q = mergeClose(q, pts);
+  const q = choosePalette(pts, params.colors, params.algorithm, removing);
 
   const grid = new Int32Array(n);
   for (let c = 0; c < n; c++) grid[c] = pointOf[c] < 0 ? -1 : q.labels[pointOf[c]];
@@ -195,6 +209,27 @@ export function convert(analysis: ImageAnalysis, rawParams: ConvertParams): Conv
   const smoothed = keepEveryColour(grid, smooth(grid, cols, rows, K, colorLab, params.smoothing), K);
 
   return buildConversion(smoothed, cols, rows, q, removing);
+}
+
+function quantise(pts: Points, k: number, algorithm: ColorAlgorithm, excludeWhite: boolean): Quantized {
+  switch (algorithm) {
+    case 'fills':
+      return fills(pts, k);
+    case 'median-cut':
+      return medianCut(pts, k);
+    case 'crayon':
+      return crayon(pts, k, excludeWhite);
+    case 'posterize':
+      return posterize(pts, k);
+    default:
+      return kmeans(pts, k, 0x5eed);
+  }
+}
+
+/** The quantiser's colours, with practically identical ones merged. */
+function choosePalette(pts: Points, k: number, algorithm: ColorAlgorithm, excludeWhite: boolean): Quantized {
+  const q = quantise(pts, k, algorithm, excludeWhite);
+  return q.fixed ? q : mergeClose(q, pts);
 }
 
 function sampleCells(d: Derived, mask: Uint8Array | null, box: Box, cols: number, rows: number, average: boolean): Float32Array {
@@ -392,9 +427,7 @@ function convertGrid(g: DetectedGrid, params: ConvertParams): Conversion {
   let q: Quantized;
   if (params.algorithm === 'crayon') q = crayon(pts, params.colors, bgHex !== null);
   else if (exact.length <= params.colors) q = { centres: lab, labels: Int32Array.from(exact.keys()), exact };
-  else if (params.algorithm === 'median-cut') q = medianCut(pts, params.colors);
-  else if (params.algorithm === 'posterize') q = posterize(pts, params.colors);
-  else q = kmeans(pts, params.colors, 0x5eed);
+  else q = quantise(pts, params.colors, params.algorithm, bgHex !== null);
   const labels = Int32Array.from(pointOf, (p) => (p < 0 ? -1 : q.labels[p]));
   return buildConversion(labels, cols, rows, q, bgHex !== null);
 }
