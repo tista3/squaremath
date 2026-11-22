@@ -1,7 +1,7 @@
 // Canvas rendering of the visible part of the solve board (only cells inside the viewport are drawn).
 import { textColorFor } from '../../core/colors';
 import type { PictogramId } from '../../core/symbols';
-import { getPictogram, PICTO_BOX, PICTO_STROKE, pictogramPath } from '../../render/pictograms';
+import { getPictogram, PICTO_BOX, PICTO_STROKE, pictogramPath, SYMBOL_INK } from '../../render/pictograms';
 import { labelLayout, splitLabel, type BoardLayout, type CellPos, type LabelLayout, type LabelMetrics } from './geometry';
 
 const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
@@ -11,6 +11,10 @@ const MIN_FONT_PX = 6;
 /** Squares smaller than this show no pictogram. */
 const MIN_PICTO_CELL_PX = 12;
 const PICTO_FILL = 0.72;
+const PICTO_LINE_MIN_PX = 1;
+const PICTO_LINE_MAX_PX = 1.8;
+/** Simple mode: a coloured square keeps just a trace of its symbol. */
+const SYMBOL_DONE_ALPHA = 0.3;
 const EMPTY_CELL = '#ffffff';
 const INK = '#1e293b';
 const GRID_LINE = '#94a3b8';
@@ -29,6 +33,7 @@ export interface BoardFrame {
   cols: number;
   rows: number;
   labels: string[];
+  /** Null in maths. In simple mode the picture per cell (null where the symbol is a label); symbols are drawn light. */
   pictograms: (PictogramId | null)[] | null;
   /** Hex per cell, null = not coloured. */
   fills: (string | null)[];
@@ -48,7 +53,7 @@ export function createTextCache(): TextCache {
   return { widths: new Map(), labels: null, metrics: null };
 }
 
-const font = (px: number) => `600 ${px}px ${FONT_FAMILY}`;
+const font = (px: number, weight = 600) => `${weight} ${px}px ${FONT_FAMILY}`;
 
 function measure(ctx: CanvasRenderingContext2D, cache: TextCache, text: string): number {
   let w = cache.widths.get(text);
@@ -161,14 +166,18 @@ function drawLabels(
   const size = text.fontPx;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = font(size);
+  const simple = f.pictograms !== null;
+  // Simple mode: regular weight and grey, like the printed sheet.
+  ctx.font = font(size, simple ? 400 : 600);
+  const ink = simple ? SYMBOL_INK : INK;
+  const doneAlpha = simple ? SYMBOL_DONE_ALPHA : 0.35;
   for (let r = r0; r < r1; r++) {
     for (let c = c0; c < c1; c++) {
       const i = r * f.cols + c;
       const fill = f.fills[i];
       // Coloured cells keep their sum faintly visible so it can be re-checked.
-      ctx.globalAlpha = fill ? 0.35 : 1;
-      ctx.fillStyle = fill ? textColorFor(fill) : INK;
+      ctx.globalAlpha = fill ? doneAlpha : 1;
+      ctx.fillStyle = fill ? textColorFor(fill) : ink;
       const cx = c * px + px / 2;
       const cy = r * px + px / 2;
       const lines = text.stacked ? splitLabel(f.labels[i]) : [f.labels[i]];
@@ -183,13 +192,13 @@ function drawLabels(
   ctx.globalAlpha = 1;
 }
 
-const pictoPaths = new Map<PictogramId, { line: Path2D; fill: Path2D }>();
+const pictoPaths = new Map<PictogramId, { line: Path2D; dots: Path2D }>();
 
-function pictoPath(id: PictogramId): { line: Path2D; fill: Path2D } {
+function pictoPath(id: PictogramId): { line: Path2D; dots: Path2D } {
   let paths = pictoPaths.get(id);
   if (!paths) {
-    const { line, fill } = getPictogram(id);
-    paths = { line: new Path2D(pictogramPath(line)), fill: new Path2D(pictogramPath(fill)) };
+    const { line, dots } = getPictogram(id);
+    paths = { line: new Path2D(pictogramPath(line)), dots: new Path2D(pictogramPath(dots)) };
     pictoPaths.set(id, paths);
   }
   return paths;
@@ -207,25 +216,27 @@ function drawPictograms(
   const px = f.cellPx;
   const scale = (px * PICTO_FILL) / PICTO_BOX;
   const inset = (px * (1 - PICTO_FILL)) / 2;
+  // In canvas units, as the context is scaled while drawing.
+  const lineWidth = Math.min(PICTO_LINE_MAX_PX, Math.max(PICTO_LINE_MIN_PX, PICTO_STROKE * scale)) / scale;
   for (let r = r0; r < r1; r++) {
     for (let c = c0; c < c1; c++) {
       const i = r * f.cols + c;
       const id = pictograms[i];
       if (!id) continue;
       const fill = f.fills[i];
-      const ink = fill ? textColorFor(fill) : INK;
+      const ink = fill ? textColorFor(fill) : SYMBOL_INK;
       const paths = pictoPath(id);
       ctx.save();
-      ctx.globalAlpha = fill ? 0.35 : 1;
+      ctx.globalAlpha = fill ? SYMBOL_DONE_ALPHA : 1;
       ctx.translate(c * px + inset, r * px + inset);
       ctx.scale(scale, scale);
-      ctx.lineWidth = PICTO_STROKE;
+      ctx.lineWidth = lineWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.strokeStyle = ink;
       ctx.fillStyle = ink;
       ctx.stroke(paths.line);
-      ctx.fill(paths.fill);
+      ctx.fill(paths.dots);
       ctx.restore();
     }
   }

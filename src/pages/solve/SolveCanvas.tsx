@@ -52,7 +52,7 @@ interface Props {
   cols: number;
   rows: number;
   labels: string[];
-  /** Simple mode with pictures: drawn instead of a label. */
+  /** Null in maths. In simple mode the picture per cell, drawn instead of a label. */
   pictograms: (PictogramId | null)[] | null;
   fills: (string | null)[];
   wrong: boolean[] | null;

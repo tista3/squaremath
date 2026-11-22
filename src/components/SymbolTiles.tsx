@@ -1,7 +1,10 @@
 // Simple-mode symbols as little boxes, like the squares on the sheet.
 import { isPictogram, type PictogramId } from '../core/symbols';
 import { t } from '../i18n';
-import { getPictogram, PICTO_BOX, PICTO_STROKE, pictogramPath } from '../render/pictograms';
+import { getPictogram, PICTO_BOX, pictogramPath } from '../render/pictograms';
+
+/** About one pixel at icon size; the sheet's thinner line would vanish on screen. */
+const ICON_STROKE = 1.2;
 
 /** What to read out for a symbol; numbers and letters read as themselves. */
 export function symbolName(symbol: string): string {
@@ -10,18 +13,18 @@ export function symbolName(symbol: string): string {
 }
 
 function PictogramIcon({ id }: { id: PictogramId }) {
-  const { line, fill } = getPictogram(id);
+  const { line, dots } = getPictogram(id);
   return (
     <svg className="pictogram" viewBox={`-1 -1 ${PICTO_BOX + 2} ${PICTO_BOX + 2}`} aria-hidden="true" focusable="false">
       <path
         d={pictogramPath(line)}
         fill="none"
         stroke="currentColor"
-        strokeWidth={PICTO_STROKE}
+        strokeWidth={ICON_STROKE}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d={pictogramPath(fill)} fill="currentColor" />
+      <path d={pictogramPath(dots)} fill="currentColor" />
     </svg>
   );
 }

@@ -6,21 +6,40 @@ import { PICTOGRAM_SETS, SYMBOL_SETS, SYMBOLS_PER_COLOR, symbolCapacity } from '
 import { DEFAULT_PRINT, DEFAULT_PUZZLE, MAX_PALETTE, type Design } from '../core/types';
 import { drawOps, parseSheetSvg } from '../export/pdf';
 import { t } from '../i18n';
-import { getPictogram, PICTO_BOX } from './pictograms';
+import { getPictogram, PICTO_BOX, PICTO_DOT_MAX, PICTO_STROKE, SYMBOL_INK } from './pictograms';
 import { MARGIN, pageSizeMm, renderSheetPages, type OkPuzzle } from './sheet';
 
 const PICTOGRAMS = Object.values(PICTOGRAM_SETS).flat();
 
 describe('pictograms', () => {
   it.each(PICTOGRAMS)('%s is drawn inside its canvas and has a name', (id) => {
-    const { line, fill } = getPictogram(id);
-    const points = [...line, ...fill].flatMap((s) => s.points).flat();
+    const { line, dots } = getPictogram(id);
+    const points = [...line, ...dots].flatMap((s) => s.points).flat();
     expect(points.length).toBeGreaterThan(0);
     for (const v of points) {
       expect(v).toBeGreaterThanOrEqual(-1);
       expect(v).toBeLessThanOrEqual(PICTO_BOX + 1);
     }
     expect(t(`symbols.${id}`)).not.toBe(`symbols.${id}`);
+  });
+
+  // Children colour over them: no solid areas, and little ink altogether.
+  it.each(PICTOGRAMS)('%s is light enough to colour over', (id) => {
+    const { line, dots } = getPictogram(id);
+    let ink = 0;
+    for (const { points } of dots) {
+      const xs = points.map((p) => p[0]);
+      const ys = points.map((p) => p[1]);
+      const w = Math.max(...xs) - Math.min(...xs);
+      const h = Math.max(...ys) - Math.min(...ys);
+      expect(Math.max(w, h)).toBeLessThanOrEqual(2 * PICTO_DOT_MAX + 1e-6);
+      ink += (Math.PI * w * h) / 4;
+    }
+    for (const { points, closed } of line) {
+      const path = closed ? [...points, points[0]] : points;
+      for (let i = 1; i < path.length; i++) ink += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]) * PICTO_STROKE;
+    }
+    expect(ink / PICTO_BOX ** 2).toBeLessThan(0.25);
   });
 });
 
@@ -40,6 +59,23 @@ function makeDesign(size: number, colors: number, set: (typeof SYMBOL_SETS)[numb
     updatedAt: 0,
   };
 }
+
+describe('symbol ink', () => {
+  /** Fill of every number or letter centred in a square or key box, as the PDF draws it. */
+  const centredInk = (design: Design) => {
+    const [svg] = renderSheetPages(design, generatePuzzle(design) as OkPuzzle, 'puzzle');
+    return new Set(parseSheetSvg(svg).flatMap((op) => (op.kind === 'text' && op.anchor === 'middle' ? [op.fill] : [])));
+  };
+
+  it.each(['numbers', 'upper', 'lower'] as const)('%s are grey in the squares and in the key', (set) => {
+    expect(centredInk(makeDesign(8, 4, set, 2))).toEqual(new Set([SYMBOL_INK]));
+  });
+
+  it('sums stay black', () => {
+    const design = makeDesign(8, 4, 'numbers', 1);
+    expect(centredInk({ ...design, puzzle: { ...DEFAULT_PUZZLE, blankBackground: false } })).toEqual(new Set(['#000000']));
+  });
+});
 
 describe('simple sheets', () => {
   for (const set of SYMBOL_SETS) {

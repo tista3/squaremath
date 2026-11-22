@@ -9,7 +9,7 @@ import type { Design, LegendEntry, PaperSize, PuzzleResult } from '../core/types
 import { formatExpression, formatLegendValues, generatePuzzle } from '../core/puzzle';
 import { isPictogram, type PictogramId } from '../core/symbols';
 import { distinctNames, sortLegendForDisplay } from './legendOrder';
-import { getPictogram, PICTO_BOX, PICTO_STROKE, pictogramPath } from './pictograms';
+import { getPictogram, PICTO_BOX, PICTO_STROKE, pictogramPath, SYMBOL_INK } from './pictograms';
 import { textWidth } from './textMetrics';
 
 export type OkPuzzle = Extract<PuzzleResult, { ok: true }>;
@@ -60,9 +60,14 @@ const KEY_BOX = 7;
 const KEY_BOX_GAP = 1.2;
 const KEY_BOX_STEP = KEY_BOX + KEY_BOX_GAP;
 const KEY_BOX_FS = 4.8;
-/** A pictogram's edge as a share of its square, and at most this many mm. */
-const PICTO_FILL = 0.78;
-const PICTO_MAX = 12;
+/** A pictogram's edge as a share of its square, and at most this many mm: the rest is left to the crayon. */
+const PICTO_FILL = 0.7;
+const PICTO_MAX = 9;
+/** In the key nothing is coloured over it, so it may fill more of its box. */
+const KEY_PICTO_FILL = 0.8;
+/** Pictogram lines (mm): thick enough to print, thin enough to disappear under colour. */
+const PICTO_LINE_MIN = 0.16;
+const PICTO_LINE_MAX = 0.24;
 
 /** Squares smaller than this (mm) are hard to read and colour: the puzzle is then split over several pages. */
 export const TILE_MIN_CELL_MM = 7;
@@ -613,7 +618,7 @@ function expressionText(text: string, cx: number, cy: number, style: ExprStyle):
   );
 }
 
-function expressionsSvg(design: Design, texts: string[], style: ExprStyle, layout: SheetLayout, region: Region): string {
+function expressionsSvg(design: Design, texts: string[], style: ExprStyle, layout: SheetLayout, region: Region, ink: string): string {
   const out: string[] = [];
   for (let r = 0; r < region.rows; r++) {
     for (let c = 0; c < region.cols; c++) {
@@ -624,20 +629,20 @@ function expressionsSvg(design: Design, texts: string[], style: ExprStyle, layou
       out.push(expressionText(text, cx, cy, style));
     }
   }
-  return `<g font-size="${n(style.fs)}" text-anchor="middle" fill="#000">${out.join('')}</g>`;
+  return `<g font-size="${n(style.fs)}" text-anchor="middle" fill="${ink}">${out.join('')}</g>`;
 }
 
 /** A pictogram centred on (cx, cy): plain M/L/Z paths, so export/pdf draws it as vectors. */
 function pictogramSvg(id: PictogramId, cx: number, cy: number, size: number): string {
-  const { line, fill } = getPictogram(id);
+  const { line, dots } = getPictogram(id);
   const scale = size / PICTO_BOX;
   const x = cx - size / 2;
   const y = cy - size / 2;
-  const outline = line.length
-    ? `<path d="${pictogramPath(line, x, y, scale)}" fill="none" stroke="#000" stroke-width="${n(PICTO_STROKE * scale)}" ` +
-      `stroke-linecap="round" stroke-linejoin="round"/>`
-    : '';
-  return outline + (fill.length ? `<path d="${pictogramPath(fill, x, y, scale)}" fill="#000"/>` : '');
+  const width = Math.min(PICTO_LINE_MAX, Math.max(PICTO_LINE_MIN, PICTO_STROKE * scale));
+  const outline =
+    `<path d="${pictogramPath(line, x, y, scale)}" fill="none" stroke="${SYMBOL_INK}" stroke-width="${n(width)}" ` +
+    `stroke-linecap="round" stroke-linejoin="round"/>`;
+  return outline + (dots.length ? `<path d="${pictogramPath(dots, x, y, scale)}" fill="${SYMBOL_INK}"/>` : '');
 }
 
 function pictogramsSvg(design: Design, symbols: readonly (string | null)[], layout: SheetLayout, region: Region): string {
@@ -695,9 +700,9 @@ function keyBoxSvg(symbol: string, x: number, cy: number): string {
     `<rect class="key-box" x="${n(x)}" y="${n(cy - KEY_BOX / 2)}" width="${KEY_BOX}" height="${KEY_BOX}" ` +
     `fill="none" stroke="#000" stroke-width="${CELL_LINE_W}"/>`;
   if (!symbol) return box;
-  if (isPictogram(symbol)) return box + pictogramSvg(symbol, cx, cy, KEY_BOX * PICTO_FILL);
+  if (isPictogram(symbol)) return box + pictogramSvg(symbol, cx, cy, KEY_BOX * KEY_PICTO_FILL);
   const baseline = cy + BASELINE_SHIFT * KEY_BOX_FS;
-  return `${box}<text x="${n(cx)}" y="${n(baseline)}" font-size="${KEY_BOX_FS}" text-anchor="middle">${escapeXml(symbol)}</text>`;
+  return `${box}<text x="${n(cx)}" y="${n(baseline)}" font-size="${KEY_BOX_FS}" text-anchor="middle" fill="${SYMBOL_INK}">${escapeXml(symbol)}</text>`;
 }
 
 /** Simple-mode key entry: colour box, name, then the boxed symbols (wrapped as wrapItem decided). */
@@ -770,7 +775,7 @@ function puzzlePages(design: Design, puzzle: OkPuzzle, plan: SheetPlan): string[
     pageSvg(
       layout.page,
       headerSvg(design, 'puzzle', layout.page.w, split ? { index, tilesX, tilesY } : null) +
-        expressionsSvg(design, texts, style, layout, region) +
+        expressionsSvg(design, texts, style, layout, region, symbols ? SYMBOL_INK : '#000') +
         (symbols ? pictogramsSvg(design, symbols, layout, region) : '') +
         gridFrameSvg(layout, region) +
         (split ? labelsSvg(layout, region) : '') +
