@@ -5,12 +5,15 @@
 //   cells  = one char per cell, CELL_ALPHABET[paletteIndex], row-major
 //   puzzle = [opsBitmask (ALL_OPS order), addSubMax, mulDivMax, legendModeIndex, seed, blankBackground 0|1]
 //            (links made before blankBackground existed have 5 entries → the default applies)
+//            simple mode appends [symbolSetIndex, symbolsPerColour]; maths links never have them, so their payloads
+//            (and the ids and saved progress derived from those) are the same as before simple mode existed
 //   print  = [paperIndex, orientationIndex, divSymbolIndex, mulSymbolIndex, flags (1 title, 2 solution, 4 swatches)]
 // lz-string's URI alphabet is [A-Za-z0-9+$-], so with "~" the payload never contains '/', '?' or '#'.
 import { compressToEncodedURIComponent } from 'lz-string';
 import { routes } from '../routes';
 import { CELL_ALPHABET, cellsToString, normalizeDesign } from './design';
 import { decompressFromUriBounded } from './lz';
+import { SYMBOL_SETS } from './symbols';
 import { ALL_OPS, GRID_MAX, MAX_PALETTE } from './types';
 import type { Design, PrintSettings, PuzzleSettings } from './types';
 
@@ -31,7 +34,7 @@ const FLAG_TITLE = 1;
 const FLAG_SOLUTION = 2;
 const FLAG_SWATCHES = 4;
 
-type CompactPuzzle = [number, number, number, number, number, number];
+type CompactPuzzle = [number, number, number, number, number, number, ...number[]];
 type CompactPrint = [number, number, number, number, number];
 type Compact = [string, number, number, [string, string][], number, string, CompactPuzzle, CompactPrint];
 
@@ -39,6 +42,7 @@ function toCompact(d: Design): Compact {
   const bg = Math.max(0, d.palette.findIndex((c) => c.id === d.backgroundId));
   const p = d.puzzle;
   const opsMask = ALL_OPS.reduce((mask, op, i) => (p.ops.includes(op) ? mask | (1 << i) : mask), 0);
+  const simple = p.simple?.on ? [SYMBOL_SETS.indexOf(p.simple.set), p.simple.perColor] : [];
   const pr = d.print;
   const flags =
     (pr.showTitle ? FLAG_TITLE : 0) | (pr.includeSolution ? FLAG_SOLUTION : 0) | (pr.legendSwatches ? FLAG_SWATCHES : 0);
@@ -49,7 +53,7 @@ function toCompact(d: Design): Compact {
     d.palette.map((c) => [c.name, c.hex.slice(1)]),
     bg,
     cellsToString(d),
-    [opsMask, p.addSubMax, p.mulDivMax, LEGEND_MODES.indexOf(p.legendMode), p.seed, p.blankBackground ? 1 : 0],
+    [opsMask, p.addSubMax, p.mulDivMax, LEGEND_MODES.indexOf(p.legendMode), p.seed, p.blankBackground ? 1 : 0, ...simple],
     [
       PAPERS.indexOf(pr.paper),
       ORIENTATIONS.indexOf(pr.orientation),
@@ -69,7 +73,7 @@ const paletteId = (i: number) => `c${i}`;
 
 function expandPuzzle(raw: unknown): Partial<Record<keyof PuzzleSettings, unknown>> | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const [mask, addSubMax, mulDivMax, legend, seed, blank] = raw;
+  const [mask, addSubMax, mulDivMax, legend, seed, blank, symbolSet, perColor] = raw;
   return {
     ops: typeof mask === 'number' ? ALL_OPS.filter((_, i) => mask & (1 << i)) : undefined,
     addSubMax,
@@ -77,6 +81,7 @@ function expandPuzzle(raw: unknown): Partial<Record<keyof PuzzleSettings, unknow
     legendMode: at(LEGEND_MODES, legend),
     seed,
     blankBackground: blank === 0 ? false : blank === 1 ? true : undefined,
+    simple: typeof symbolSet === 'number' ? { on: true, set: at(SYMBOL_SETS, symbolSet), perColor } : undefined,
   };
 }
 

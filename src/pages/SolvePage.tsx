@@ -41,7 +41,9 @@ function SolveUnavailable({ outcome, onOpenSettings }: { outcome: Extract<Puzzle
   const message =
     error.code === 'tooManyColors'
       ? t('solve.cannotSolveColors', { used: error.colorsUsed, available: error.resultsAvailable })
-      : t('solve.cannotSolve');
+      : error.code === 'tooFewSymbols'
+        ? t('solve.cannotSolveSymbols', { used: error.colorsUsed, available: error.symbolsAvailable })
+        : t('solve.cannotSolve');
   return (
     <div className="page">
       <div className="panel stack solve-unavailable" role="alert">

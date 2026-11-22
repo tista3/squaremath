@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { Icon } from '../../components/Icon';
 import { opSymbol } from '../../components/ui';
 import { maxColorsFor, puzzleWarnings, randomSeed, type PuzzleWarning } from '../../core/puzzle';
+import { symbolCapacity, type SimpleSettings } from '../../core/symbols';
 import { ADD_SUB_LIMITS, MUL_DIV_LIMITS, type Design, type PuzzleSettings } from '../../core/types';
 import { t } from '../../i18n';
 import { sheetCellSizeMm, sheetPageCount, TILE_MIN_CELL_MM, type OkPuzzle } from '../../render/sheet';
 import { duplicateColorNames } from './legend';
 import { puzzleErrorMessage } from './messages';
-import { ADD_SUB_PRESETS, MUL_DIV_PRESETS, quickFixes, usesAddSub, usesMulDiv, type QuickFix } from './settings';
+import { ADD_SUB_PRESETS, biggerSets, MUL_DIV_PRESETS, quickFixes, usesAddSub, usesMulDiv, type QuickFix } from './settings';
 import type { PuzzleOutcome } from './usePuzzleResult';
 
 /** Below this printed cell size (mm) the expressions get hard to read (the sheet splits pages to stay above it). */
@@ -26,6 +27,7 @@ export function PuzzleIssues({ design, outcome, update, onEditPicture }: Props) 
     <>
       {!outcome.ok && <GenerationError design={design} outcome={outcome} update={update} />}
       {outcome.ok && <EngineWarnings design={design} puzzle={outcome} update={update} onEditPicture={onEditPicture} />}
+      {outcome.ok && <FewerSymbolsNote design={design} puzzle={outcome} update={update} />}
       <SmallCellsWarning design={design} update={update} onEditPicture={onEditPicture} />
       <DuplicateNamesWarning design={design} onEditPicture={onEditPicture} />
     </>
@@ -51,6 +53,9 @@ function GenerationError({ design, outcome, update }: Omit<Props, 'onEditPicture
       <p className="row">
         <Icon name="warning" /> <span>{message}</span>
       </p>
+      {error.code === 'tooFewSymbols' && design.puzzle.simple && (
+        <SetFixes simple={design.puzzle.simple} needed={error.colorsUsed} update={update} />
+      )}
       {fixes.length > 0 && (
         <div className="toolbar">
           {fixes.map((fix) => (
@@ -60,6 +65,49 @@ function GenerationError({ design, outcome, update }: Omit<Props, 'onEditPicture
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** One-tap switches to a symbol set that is big enough. */
+function SetFixes({ simple, needed, update }: { simple: SimpleSettings; needed: number; update: Props['update'] }) {
+  const sets = biggerSets(simple, needed);
+  if (sets.length === 0) return null;
+  return (
+    <div className="toolbar">
+      {sets.map((set) => (
+        <button
+          key={set}
+          type="button"
+          className="btn"
+          onClick={() => update((d) => ({ ...d, puzzle: { ...d.puzzle, simple: { ...simple, set } } }))}
+        >
+          {t('puzzle.fixUseSet', { set: t(`symbols.set_${set}`) })}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The set ran out before every colour had as many symbols as were asked for. */
+function FewerSymbolsNote({ design, puzzle, update }: { design: Design; puzzle: OkPuzzle; update: Props['update'] }) {
+  const simple = design.puzzle.simple;
+  if (!simple?.on) return null;
+  let given = 0;
+  let wanted = 0;
+  for (const { colorId, symbols } of puzzle.legend) {
+    if (!symbols) continue;
+    given += symbols.length;
+    wanted += Math.min(simple.perColor, design.cells.filter((id) => id === colorId).length);
+  }
+  if (given >= wanted) return null;
+  return (
+    <div className="warning puzzle-issue" role="status">
+      <p className="row">
+        <Icon name="info" />{' '}
+        <span>{t('puzzle.fewerSymbols', { available: symbolCapacity(simple.set), wanted: simple.perColor })}</span>
+      </p>
+      <SetFixes simple={simple} needed={wanted} update={update} />
     </div>
   );
 }

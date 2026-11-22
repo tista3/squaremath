@@ -6,7 +6,7 @@ import type { Design } from '../core/types';
 import { t } from '../i18n';
 import { Icon } from '../components/Icon';
 import { findCopyOf } from '../components/library';
-import { DesignPicture, OpsBadge, useToast } from '../components/ui';
+import { DesignPicture, PuzzleBadge, useToast } from '../components/ui';
 import { routes } from '../routes';
 import { useDesignStore } from '../state/store';
 import './SharedPage.css';
@@ -18,6 +18,7 @@ export default function SharedPage({ design, payload }: { design: Design; payloa
   // Hidden by default: the picture is the puzzle's solution.
   const [showPicture, setShowPicture] = useState(false);
   const basePath = routes.shared(payload);
+  const simple = design.puzzle.simple?.on ? design.puzzle.simple : null;
   const colours = useMemo(() => {
     const used = new Set(usedColorIds(design));
     return design.palette.filter((c) => used.has(c.id));
@@ -47,14 +48,14 @@ export default function SharedPage({ design, payload }: { design: Design; payloa
               </dd>
             </div>
             <div>
-              <dt>{t('shared.operations')}</dt>
+              <dt>{t(simple ? 'shared.simple' : 'shared.operations')}</dt>
               <dd>
-                <OpsBadge ops={design.puzzle.ops} />
+                <PuzzleBadge puzzle={design.puzzle} />
               </dd>
             </div>
             <div>
-              <dt>{t('shared.legend')}</dt>
-              <dd>{t(design.puzzle.legendMode === 'range' ? 'shared.legendRange' : 'shared.legendValue')}</dd>
+              <dt>{t(simple ? 'shared.perColor' : 'shared.legend')}</dt>
+              <dd>{simple ? simple.perColor : t(design.puzzle.legendMode === 'range' ? 'shared.legendRange' : 'shared.legendValue')}</dd>
             </div>
           </dl>
           <div className="stack shared-colours">

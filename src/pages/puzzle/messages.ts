@@ -8,6 +8,8 @@ export function puzzleErrorMessage(error: PuzzleError | { code: 'unexpected' }):
   switch (error.code) {
     case 'tooManyColors':
       return t('puzzle.tooManyColors', { used: error.colorsUsed, available: error.resultsAvailable });
+    case 'tooFewSymbols':
+      return t('puzzle.tooFewSymbols', { used: error.colorsUsed, available: error.symbolsAvailable });
     case 'noOps':
       return t('puzzle.noOps');
     default:

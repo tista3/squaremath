@@ -3,7 +3,8 @@
 SquareMath is a colour-by-math web app for children. Draw a pixel picture on a grid of squares, and
 SquareMath turns it into a puzzle sheet: every square gets a sum (+ − × ÷), and a legend says which
 colour each answer stands for. Print the sheet, solve the sums, colour the squares, and the picture
-appears.
+appears. For children who don't do sums yet, simple mode puts a number, a letter or a little picture
+in each square instead.
 
 It is a static React app with no server and no accounts. Designs stay in your browser, and you share
 one by sending a link.
@@ -22,6 +23,11 @@ one by sending a link.
   ("Red 3, 7, 12"). Press the dice for a new set of sums. The generator spreads the operations over
   all colours and avoids repeating sums; for extreme settings (tiny limits, many colours) the Puzzle
   page explains what makes the sheet dull or easy to guess and offers a one-tap fix.
+- **Simple mode.** On the Puzzle page, switch from Maths to Simple: there are no sums, each symbol is
+  a colour. Choose numbers, big or small letters, one of five pictogram sets (shapes, animals, nature,
+  food, vehicles) or mixed pictures, and whether one symbol or a group of up to four means the same
+  colour. Small puzzles avoid look-alike letters, and when a set is too small for the picture the page
+  offers a bigger one.
 - **Print, PDF and PNG.** A puzzle sheet without colours, plus the legend (in number order, with
   colours that share a name numbered "Blue (1)", "Blue (2)") and an optional solution page, on A4 or
   Letter. Big grids are split over up to 3×3 pages, with row and column numbers, so every square stays
@@ -93,6 +99,7 @@ src/
     grid.ts          Line rasteriser, grid size presets and clamping
     colors.ts        Colour naming (CIEDE2000 nearest crayon), hex helpers
     puzzle.ts        Puzzle generator: expressions, legend and quality warnings
+    symbols.ts       Simple mode: symbol sets and which symbols stand for each colour
     rng.ts           Seeded random numbers
     codec.ts         Share-link encoding (lz-string)
     lz.ts            Bounded share-link decompressor (rejects decompression bombs)
@@ -107,6 +114,7 @@ src/
   render/
     sheet.ts         Printable SVG sheets (puzzle pages, split when big, and solution) and the picture SVG
     legendOrder.ts   Key order (by number) and numbering of duplicate colour names
+    pictograms.ts    The pictogram drawings of simple mode (vector paths)
     textMetrics.ts   Helvetica/Arial glyph widths for laying out text without a DOM
   export/
     index.ts         Print, PDF (jsPDF, loaded on demand) and PNG downloads
@@ -133,7 +141,7 @@ Routes (hash based):
 ## Adding a UI language
 
 UI text lives in one dictionary per namespace in `src/i18n/en/` (`common`, `gallery`, `editor`,
-`puzzle`, `solve`, `shared`). Keys are used as `t('<namespace>.<key>')`, and placeholders look like
+`puzzle`, `solve`, `shared`, `photo`, `symbols`). Keys are used as `t('<namespace>.<key>')`, and placeholders look like
 `{name}`. For counts, pass `{ count }` and add plural variants named after the
 `Intl.PluralRules` categories, for example `boxes_one: '{count} box'` and
 `boxes_other: '{count} boxes'`; `t('editor.boxes', { count })` picks the right one and falls back to

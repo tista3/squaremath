@@ -3,6 +3,8 @@ const dict: Record<string, string> = {
   kicker: 'Someone shared a puzzle with you',
   size: 'Size',
   operations: 'Maths',
+  simple: 'Simple puzzle',
+  perColor: 'For each colour',
   legend: 'Colour key',
   legendRange: 'Number ranges',
   legendValue: 'Exact numbers',

@@ -3,10 +3,13 @@
 // Text is measured with Helvetica/Arial glyph widths (./textMetrics) because the SVG is built as a string
 // without a DOM. Puzzles whose squares would be too small to read on one page are split over several pages
 // ("tiles") with row/column numbers; the key is repeated on every page so a child never has to flip.
+// Pictograms of simple mode are flattened paths (./pictograms).
 // The SVG only uses rect, path and text/tspan with plain hex colours, so export/pdf can redraw it as vectors.
 import type { Design, LegendEntry, PaperSize, PuzzleResult } from '../core/types';
 import { formatExpression, formatLegendValues, generatePuzzle } from '../core/puzzle';
+import { isPictogram, type PictogramId } from '../core/symbols';
 import { distinctNames, sortLegendForDisplay } from './legendOrder';
+import { getPictogram, PICTO_BOX, PICTO_STROKE, pictogramPath } from './pictograms';
 import { textWidth } from './textMetrics';
 
 export type OkPuzzle = Extract<PuzzleResult, { ok: true }>;
@@ -51,6 +54,15 @@ const SWATCH_STROKE = 0.35;
 const LEGEND_ROW_GAP = 2.5;
 const LEGEND_COL_GAP = 6;
 const LEGEND_COL_MIN = 36;
+
+/** Simple mode: key symbols sit in little boxes, like the squares of the grid. */
+const KEY_BOX = 7;
+const KEY_BOX_GAP = 1.2;
+const KEY_BOX_STEP = KEY_BOX + KEY_BOX_GAP;
+const KEY_BOX_FS = 4.8;
+/** A pictogram's edge as a share of its square, and at most this many mm. */
+const PICTO_FILL = 0.78;
+const PICTO_MAX = 12;
 
 /** Squares smaller than this (mm) are hard to read and colour: the puzzle is then split over several pages. */
 export const TILE_MIN_CELL_MM = 7;
@@ -152,12 +164,15 @@ interface LegendItem {
   name: string;
   values: string;
   hex: string;
+  /** Simple mode: drawn as boxes instead of `values`; '' is an empty box (blank background). */
+  symbols?: string[];
 }
 
 /** One printed line of a legend entry: (part of) the bold name and/or values. */
 interface LegendLine {
   name: string;
   values: string;
+  symbols: string[];
 }
 
 interface WrappedItem extends LegendItem {
@@ -188,10 +203,14 @@ function legendItems(design: Design, legend: LegendEntry[]): LegendItem[] {
   const colors = colorMap(design);
   const names = distinctNames(legend.map((entry) => colors.get(entry.colorId)?.name ?? '?'));
   const nameOf = new Map(legend.map((entry, i) => [entry.colorId, names[i]]));
+  const simple = !!design.puzzle.simple?.on;
   return sortLegendForDisplay(legend, design.puzzle.legendMode).map((entry) => ({
     name: nameOf.get(entry.colorId) ?? '?',
     hex: colors.get(entry.colorId)?.hex ?? '#ffffff',
-    values: formatLegendValues(entry, design.puzzle.legendMode),
+    // An empty box rather than "□", which the PDF's built-in font does not have.
+    ...(simple
+      ? { values: '', symbols: entry.blank ? [''] : entry.symbols }
+      : { values: formatLegendValues(entry, design.puzzle.legendMode) }),
   }));
 }
 
@@ -209,7 +228,8 @@ function nameWidth(item: LegendItem): number {
 
 function itemWidth(item: LegendItem): number {
   const values = item.values ? textWidth(` ${item.values}`, LEGEND_FS) : 0;
-  return nameWidth(item) + values;
+  const boxes = (item.symbols?.length ?? 0) * KEY_BOX_STEP;
+  return nameWidth(item) + values + boxes;
 }
 
 /** Splits a word that is wider than `maxW` on its own into pieces that fit. */
@@ -243,18 +263,18 @@ function wrapWords(text: string, maxW: number, bold: boolean): string[] {
 
 /**
  * Fits an entry into a column: the bold name (wrapped only if it is wider than the column on its own), then
- * the values ("6, 12, 15") after it, continuing on further lines when they do not fit.
+ * the values ("6, 12, 15") or symbol boxes after it, continuing on further lines when they do not fit.
  */
 function wrapItem(item: LegendItem, colW: number): WrappedItem {
   const textW = colW - TEXT_X;
   const names = textWidth(item.name, LEGEND_FS, true) <= textW ? [item.name] : wrapWords(item.name, textW, true);
-  const lines: LegendLine[] = names.map((name) => ({ name, values: '' }));
+  const lines: LegendLine[] = names.map((name) => ({ name, values: '', symbols: [] }));
   let line = lines[lines.length - 1];
   let used = textWidth(line.name, LEGEND_FS, true);
   for (const token of item.values ? item.values.split(/(?<=,)\s+/) : []) {
     const add = textWidth(` ${token}`, LEGEND_FS);
     if (used + add > textW) {
-      line = { name: '', values: token };
+      line = { name: '', values: token, symbols: [] };
       lines.push(line);
       used = textWidth(token, LEGEND_FS);
     } else {
@@ -262,7 +282,17 @@ function wrapItem(item: LegendItem, colW: number): WrappedItem {
       used += add;
     }
   }
-  return { ...item, lines, h: Math.max(SWATCH, lines.length * LEGEND_LINE_H) };
+  if (!item.symbols) return { ...item, lines, h: Math.max(SWATCH, lines.length * LEGEND_LINE_H) };
+  for (const symbol of item.symbols) {
+    if (used + KEY_BOX_STEP > textW) {
+      line = { name: '', values: '', symbols: [] };
+      lines.push(line);
+      used = 0;
+    }
+    line.symbols.push(symbol);
+    used += KEY_BOX_STEP;
+  }
+  return { ...item, lines, h: lines.length * KEY_BOX_STEP - KEY_BOX_GAP };
 }
 
 /**
@@ -597,6 +627,32 @@ function expressionsSvg(design: Design, texts: string[], style: ExprStyle, layou
   return `<g font-size="${n(style.fs)}" text-anchor="middle" fill="#000">${out.join('')}</g>`;
 }
 
+/** A pictogram centred on (cx, cy): plain M/L/Z paths, so export/pdf draws it as vectors. */
+function pictogramSvg(id: PictogramId, cx: number, cy: number, size: number): string {
+  const { line, fill } = getPictogram(id);
+  const scale = size / PICTO_BOX;
+  const x = cx - size / 2;
+  const y = cy - size / 2;
+  const outline = line.length
+    ? `<path d="${pictogramPath(line, x, y, scale)}" fill="none" stroke="#000" stroke-width="${n(PICTO_STROKE * scale)}" ` +
+      `stroke-linecap="round" stroke-linejoin="round"/>`
+    : '';
+  return outline + (fill.length ? `<path d="${pictogramPath(fill, x, y, scale)}" fill="#000"/>` : '');
+}
+
+function pictogramsSvg(design: Design, symbols: readonly (string | null)[], layout: SheetLayout, region: Region): string {
+  const size = Math.min(PICTO_MAX, layout.cell * PICTO_FILL);
+  const out: string[] = [];
+  for (let r = 0; r < region.rows; r++) {
+    for (let c = 0; c < region.cols; c++) {
+      const symbol = symbols[(region.row0 + r) * design.width + region.col0 + c];
+      if (!symbol || !isPictogram(symbol)) continue;
+      out.push(pictogramSvg(symbol, layout.gridX + (c + 0.5) * layout.cell, layout.gridY + (r + 0.5) * layout.cell, size));
+    }
+  }
+  return out.length ? `<g class="pictograms">${out.join('')}</g>` : '';
+}
+
 /** Row and column numbers (1-based, of the whole design) around a page of a split puzzle. */
 function labelsSvg(layout: SheetLayout, region: Region): string {
   const { gridX, gridY, cell } = layout;
@@ -625,7 +681,44 @@ function gridFrameSvg(layout: SheetLayout, region: Region): string {
   );
 }
 
-function legendItemSvg({ item, x, y }: PlacedItem, filled: boolean): string {
+function swatchSvg(item: LegendItem, x: number, y: number, filled: boolean): string {
+  return (
+    `<rect x="${n(x)}" y="${n(y)}" width="${SWATCH}" height="${SWATCH}" rx="0.6" ` +
+    `fill="${filled ? item.hex : '#ffffff'}" stroke="#000" stroke-width="${SWATCH_STROKE}"/>`
+  );
+}
+
+/** One symbol of the simple-mode key in its box, with the box's left edge at x and centred on cy. */
+function keyBoxSvg(symbol: string, x: number, cy: number): string {
+  const cx = x + KEY_BOX / 2;
+  const box =
+    `<rect class="key-box" x="${n(x)}" y="${n(cy - KEY_BOX / 2)}" width="${KEY_BOX}" height="${KEY_BOX}" ` +
+    `fill="none" stroke="#000" stroke-width="${CELL_LINE_W}"/>`;
+  if (!symbol) return box;
+  if (isPictogram(symbol)) return box + pictogramSvg(symbol, cx, cy, KEY_BOX * PICTO_FILL);
+  const baseline = cy + BASELINE_SHIFT * KEY_BOX_FS;
+  return `${box}<text x="${n(cx)}" y="${n(baseline)}" font-size="${KEY_BOX_FS}" text-anchor="middle">${escapeXml(symbol)}</text>`;
+}
+
+/** Simple-mode key entry: colour box, name, then the boxed symbols (wrapped as wrapItem decided). */
+function symbolItemSvg({ item, x, y }: PlacedItem, filled: boolean): string {
+  const tx = x + TEXT_X;
+  const out = [swatchSvg(item, x, y + (KEY_BOX - SWATCH) / 2, filled)];
+  item.lines.forEach((line, i) => {
+    const cy = y + KEY_BOX / 2 + i * KEY_BOX_STEP;
+    let bx = tx;
+    if (line.name) {
+      out.push(`<text x="${n(tx)}" y="${n(cy + BASELINE_SHIFT * LEGEND_FS)}" font-weight="bold">${escapeXml(line.name)}</text>`);
+      bx += textWidth(line.name, LEGEND_FS, true) + KEY_BOX_GAP;
+    }
+    line.symbols.forEach((symbol, k) => out.push(keyBoxSvg(symbol, bx + k * KEY_BOX_STEP, cy)));
+  });
+  return out.join('');
+}
+
+function legendItemSvg(placed: PlacedItem, filled: boolean): string {
+  const { item, x, y } = placed;
+  if (item.symbols) return symbolItemSvg(placed, filled);
   const tx = x + TEXT_X;
   const baseline = y + SWATCH / 2 + BASELINE_SHIFT * LEGEND_FS;
   const lines = item.lines.map((line, i) => {
@@ -635,11 +728,7 @@ function legendItemSvg({ item, x, y }: PlacedItem, filled: boolean): string {
     const values = escapeXml(line.name ? ` ${line.values}` : line.values);
     return `${name}<tspan${line.name ? '' : pos}>${values}</tspan>`;
   });
-  return (
-    `<rect x="${n(x)}" y="${n(y)}" width="${SWATCH}" height="${SWATCH}" rx="0.6" ` +
-    `fill="${filled ? item.hex : '#ffffff'}" stroke="#000" stroke-width="${SWATCH_STROKE}"/>` +
-    `<text x="${n(tx)}" y="${n(baseline)}">${lines.join('')}</text>`
-  );
+  return `${swatchSvg(item, x, y, filled)}<text x="${n(tx)}" y="${n(baseline)}">${lines.join('')}</text>`;
 }
 
 function legendSvg(layout: SheetLayout, filled: boolean): string {
@@ -671,7 +760,10 @@ function solutionPage(design: Design, items: LegendItem[]): string {
 function puzzlePages(design: Design, puzzle: OkPuzzle, plan: SheetPlan): string[] {
   const { layout, tiles, tilesX, tilesY } = plan;
   // Blank (background) cells have no expression and stay empty.
-  const texts = puzzle.expressions.map((e) => (e ? formatExpression(e, design.print) : ''));
+  const { symbols } = puzzle;
+  const texts = symbols
+    ? symbols.map((s) => (s && !isPictogram(s) ? s : ''))
+    : puzzle.expressions.map((e) => (e ? formatExpression(e, design.print) : ''));
   const style = expressionStyle(texts.filter(Boolean), layout.cell);
   const split = tiles.length > 1;
   return tiles.map((region, index) =>
@@ -679,6 +771,7 @@ function puzzlePages(design: Design, puzzle: OkPuzzle, plan: SheetPlan): string[
       layout.page,
       headerSvg(design, 'puzzle', layout.page.w, split ? { index, tilesX, tilesY } : null) +
         expressionsSvg(design, texts, style, layout, region) +
+        (symbols ? pictogramsSvg(design, symbols, layout, region) : '') +
         gridFrameSvg(layout, region) +
         (split ? labelsSvg(layout, region) : '') +
         legendSvg(layout, design.print.legendSwatches),

@@ -1,11 +1,16 @@
 // Canvas rendering of the visible part of the solve board (only cells inside the viewport are drawn).
 import { textColorFor } from '../../core/colors';
+import type { PictogramId } from '../../core/symbols';
+import { getPictogram, PICTO_BOX, PICTO_STROKE, pictogramPath } from '../../render/pictograms';
 import { labelLayout, splitLabel, type BoardLayout, type CellPos, type LabelLayout, type LabelMetrics } from './geometry';
 
 const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 const MEASURE_PX = 100;
 /** Text smaller than this is noise; the child zooms in instead. */
 const MIN_FONT_PX = 6;
+/** Squares smaller than this show no pictogram. */
+const MIN_PICTO_CELL_PX = 12;
+const PICTO_FILL = 0.72;
 const EMPTY_CELL = '#ffffff';
 const INK = '#1e293b';
 const GRID_LINE = '#94a3b8';
@@ -24,6 +29,7 @@ export interface BoardFrame {
   cols: number;
   rows: number;
   labels: string[];
+  pictograms: (PictogramId | null)[] | null;
   /** Hex per cell, null = not coloured. */
   fills: (string | null)[];
   wrong: boolean[] | null;
@@ -92,6 +98,7 @@ export function drawBoard(canvas: HTMLCanvasElement, f: BoardFrame, cache: TextC
   drawGridLines(ctx, f, c0, c1, r0, r1);
   const text = labelLayout(boardMetrics(ctx, cache, f.labels), f.cellPx);
   if (text.fontPx >= MIN_FONT_PX) drawLabels(ctx, f, text, c0, c1, r0, r1);
+  if (f.pictograms && f.cellPx >= MIN_PICTO_CELL_PX) drawPictograms(ctx, f, f.pictograms, c0, c1, r0, r1);
   if (f.wrong) drawWrongMarks(ctx, f, f.wrong, c0, c1, r0, r1);
 
   ctx.lineWidth = 2;
@@ -174,6 +181,54 @@ function drawLabels(
     }
   }
   ctx.globalAlpha = 1;
+}
+
+const pictoPaths = new Map<PictogramId, { line: Path2D; fill: Path2D }>();
+
+function pictoPath(id: PictogramId): { line: Path2D; fill: Path2D } {
+  let paths = pictoPaths.get(id);
+  if (!paths) {
+    const { line, fill } = getPictogram(id);
+    paths = { line: new Path2D(pictogramPath(line)), fill: new Path2D(pictogramPath(fill)) };
+    pictoPaths.set(id, paths);
+  }
+  return paths;
+}
+
+function drawPictograms(
+  ctx: CanvasRenderingContext2D,
+  f: BoardFrame,
+  pictograms: (PictogramId | null)[],
+  c0: number,
+  c1: number,
+  r0: number,
+  r1: number,
+) {
+  const px = f.cellPx;
+  const scale = (px * PICTO_FILL) / PICTO_BOX;
+  const inset = (px * (1 - PICTO_FILL)) / 2;
+  for (let r = r0; r < r1; r++) {
+    for (let c = c0; c < c1; c++) {
+      const i = r * f.cols + c;
+      const id = pictograms[i];
+      if (!id) continue;
+      const fill = f.fills[i];
+      const ink = fill ? textColorFor(fill) : INK;
+      const paths = pictoPath(id);
+      ctx.save();
+      ctx.globalAlpha = fill ? 0.35 : 1;
+      ctx.translate(c * px + inset, r * px + inset);
+      ctx.scale(scale, scale);
+      ctx.lineWidth = PICTO_STROKE;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = ink;
+      ctx.fillStyle = ink;
+      ctx.stroke(paths.line);
+      ctx.fill(paths.fill);
+      ctx.restore();
+    }
+  }
 }
 
 function drawWrongMarks(

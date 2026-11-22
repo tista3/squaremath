@@ -2,7 +2,9 @@ import { useEffect, useMemo, useReducer, useState, type Dispatch } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { ConfirmDialog, IconButton } from '../../components/ui';
+import { symbolName } from '../../components/SymbolTiles';
 import { formatExpression } from '../../core/puzzle';
+import { isPictogram } from '../../core/symbols';
 import type { Design } from '../../core/types';
 import { printPuzzle } from '../../export';
 import { t } from '../../i18n';
@@ -73,9 +75,13 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
   }
 
   const labels = useMemo(
-    () => puzzle.expressions.map((e) => (e ? formatExpression(e, design.print) : '')),
-    [puzzle.expressions, design.print],
+    () =>
+      puzzle.symbols
+        ? puzzle.symbols.map((s) => (s && !isPictogram(s) ? s : ''))
+        : puzzle.expressions.map((e) => (e ? formatExpression(e, design.print) : '')),
+    [puzzle.expressions, puzzle.symbols, design.print],
   );
+  const pictograms = useMemo(() => puzzle.symbols?.map((s) => (s && isPictogram(s) ? s : null)) ?? null, [puzzle.symbols]);
   const hexById = useMemo(() => new Map(design.palette.map((c) => [c.id, c.hex])), [design.palette]);
   const nameById = useMemo(() => new Map(items.map((item) => [item.colorId, item.name])), [items]);
   const fills = useMemo(() => state.filled.map((id) => (id === null ? null : (hexById.get(id) ?? null))), [state.filled, hexById]);
@@ -102,7 +108,7 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
       return t('solve.cellAnnounce', {
         row: Math.floor(cell / design.width) + 1,
         col: (cell % design.width) + 1,
-        sum: labels[cell],
+        sum: puzzle.symbols ? symbolName(puzzle.symbols[cell] ?? '') : labels[cell],
         colour: id === null ? t('solve.cellEmpty') : (nameById.get(id) ?? ''),
       });
     },
@@ -177,6 +183,7 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
           cols={design.width}
           rows={design.height}
           labels={labels}
+          pictograms={pictograms}
           fills={fills}
           wrong={wrong}
           ariaLabel={t('solve.boardLabel', { name: design.name })}

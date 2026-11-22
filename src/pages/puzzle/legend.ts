@@ -1,3 +1,4 @@
+import { symbolName } from '../../components/SymbolTiles';
 import { formatLegendValues } from '../../core/puzzle';
 import type { Design, LegendEntry } from '../../core/types';
 import { distinctNames, sortLegendForDisplay } from '../../render/legendOrder';
@@ -8,8 +9,10 @@ export interface LegendItem {
   /** Colour name, numbered ("Blue (1)", "Blue (2)") when several legend colours share it. */
   name: string;
   hex: string;
-  /** "1–10" or "3, 7, 12" depending on the design's legend mode. */
+  /** "1–10" or "3, 7, 12" depending on the design's legend mode; the symbols' names in simple mode. */
   values: string;
+  /** Simple mode: shown as boxes ('' = empty box) instead of `values`. */
+  symbols?: string[];
 }
 
 const nameKey = (name: string) => name.trim().toLocaleLowerCase();
@@ -39,6 +42,10 @@ export function legendItems(design: Design, legend: LegendEntry[]): LegendItem[]
   const items = legend.flatMap((entry) => {
     const color = byId.get(entry.colorId);
     if (!color) return [];
+    if (design.puzzle.simple?.on) {
+      const symbols = entry.blank ? [''] : (entry.symbols ?? []);
+      return [{ colorId: entry.colorId, name: color.name, hex: color.hex, values: symbols.map(symbolName).join(', '), symbols }];
+    }
     const values = formatLegendValues(entry, design.puzzle.legendMode);
     return [{ colorId: entry.colorId, name: color.name, hex: color.hex, values }];
   });

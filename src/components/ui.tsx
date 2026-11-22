@@ -25,7 +25,8 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import type { Design, Op, PrintSettings } from '../core/types';
+import type { SymbolSet } from '../core/symbols';
+import type { Design, Op, PrintSettings, PuzzleSettings } from '../core/types';
 import { renderDesignSVG } from '../render/sheet';
 import { t } from '../i18n';
 import { Icon, type IconName } from './Icon';
@@ -409,6 +410,22 @@ export function OpsBadge({ ops }: { ops: Op[] }) {
   return (
     <span className="badge ops-badge" title={t('common.operations')} aria-label={`${t('common.operations')}: ${symbols}`}>
       {symbols}
+    </span>
+  );
+}
+
+/** A badge has room for text only: picture sets show their name. */
+const SET_GLYPHS: Partial<Record<SymbolSet, string>> = { numbers: '1 2 3', upper: 'A B C', lower: 'a b c' };
+
+/** Badge of a design's kind of puzzle: its operations, or the symbol set of a simple puzzle. */
+export function PuzzleBadge({ puzzle }: { puzzle: PuzzleSettings }) {
+  if (!puzzle.simple?.on) return <OpsBadge ops={puzzle.ops} />;
+  const { set } = puzzle.simple;
+  const name = t(`symbols.set_${set}`);
+  const label = t('symbols.badge', { set: name });
+  return (
+    <span className="badge simple-badge" title={label} aria-label={label}>
+      {SET_GLYPHS[set] ?? name}
     </span>
   );
 }

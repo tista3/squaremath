@@ -44,6 +44,67 @@
   box-shadow: 0 3px 0 rgb(0 0 0 / 0.18);
 }
 
+/* Maths or simple: two equal halves. */
+.puzzle-settings .puzzle-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.puzzle-mode > .btn {
+  flex-direction: column;
+  gap: 4px;
+  min-height: 72px;
+}
+
+.puzzle-mode > .btn > .puzzle-symbol-label {
+  line-height: 28px;
+}
+
+.puzzle-sets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(98px, 1fr));
+  gap: 8px;
+}
+
+.btn.puzzle-set {
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 8px 2px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.puzzle-set .symbol-tiles {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.puzzle-set .symbol-tile {
+  min-width: 25px;
+  height: 25px;
+}
+
+.puzzle-set .pictogram {
+  width: 20px;
+  height: 20px;
+}
+
+.btn.puzzle-set.active {
+  border-color: var(--accent, #2563eb);
+  background: var(--accent-soft, #ebe7ff);
+  box-shadow: inset 0 0 0 2px var(--accent, #2563eb);
+}
+
+.puzzle-settings .puzzle-per-color {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
 .puzzle-limits,
 .puzzle-settings .seg {
   flex-wrap: wrap;
@@ -250,6 +311,11 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--muted, #475569);
+}
+
+/* Symbols are the key itself, not a muted side note like a list of numbers. */
+.puzzle-legend-values .symbol-tiles {
+  color: var(--text, #1b2233);
 }
 
 .puzzle-busy {

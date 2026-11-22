@@ -11,7 +11,7 @@ import { safeFileName } from '../export';
 import { t } from '../i18n';
 import { Icon } from '../components/Icon';
 import { downloadDesignsJson, downloadLibrary, findCopyOf, importSummary, MAX_IMPORT_BYTES } from '../components/library';
-import { ConfirmDialog, DesignPicture, IconButton, InlineEdit, Modal, OpsBadge, ShareDialog, useToast } from '../components/ui';
+import { ConfirmDialog, DesignPicture, IconButton, InlineEdit, Modal, PuzzleBadge, ShareDialog, useToast } from '../components/ui';
 import { routes, type DesignSubPage } from '../routes';
 import { useDesignStore } from '../state/store';
 import {
@@ -237,7 +237,7 @@ function CardMeta({ design }: { design: Design }) {
         <Icon name="palette" size={18} />
         {colours}
       </span>
-      <OpsBadge ops={design.puzzle.ops} />
+      <PuzzleBadge puzzle={design.puzzle} />
     </p>
   );
 }

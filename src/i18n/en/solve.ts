@@ -32,6 +32,8 @@ const dict: Record<string, string> = {
   cannotSolveTitle: 'This puzzle cannot be made yet',
   cannotSolveColors:
     'This picture uses {used} colours, but the puzzle settings only give {available} different answers. Turn on more operations or use bigger numbers.',
+  cannotSolveSymbols:
+    'This picture uses {used} colours, but this set only has {available}. Pick a bigger set in the puzzle settings.',
   cannotSolve: 'Something went wrong while making the puzzle. Try other puzzle settings.',
   openSettings: 'Puzzle settings',
 };

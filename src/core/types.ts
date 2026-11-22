@@ -1,3 +1,5 @@
+import type { SimpleSettings } from './symbols';
+
 /**
  * SquareMath core data model. THIS FILE IS THE SHARED CONTRACT — every module builds on it.
  *
@@ -5,6 +7,8 @@
  * A Puzzle is generated from a Design: every cell gets an arithmetic expression; solving it gives
  * a number, and the Legend maps numbers (exact values or ranges) to colour NAMES. The printed sheet
  * is black & white: the grid with expressions + the legend (colour name → values/range).
+ * In simple mode (PuzzleSettings.simple.on) there is no maths: every cell shows a symbol (number, letter
+ * or pictogram) and the legend lists the symbols of each colour. See ./symbols.
  */
 
 export type Op = 'add' | 'sub' | 'mul' | 'div';
@@ -32,6 +36,11 @@ export interface PuzzleSettings {
   seed: number;
   /** Cells of the background colour get no expression: they stay empty on the sheet (default on). */
   blankBackground: boolean;
+  /**
+   * Simple mode. Absent in designs that never used it, so their files, share links and saved progress stay
+   * as they were; the maths settings above are ignored while `on`.
+   */
+  simple?: SimpleSettings;
 }
 
 export type PaperSize = 'A4' | 'Letter';
@@ -101,11 +110,15 @@ export interface LegendEntry {
    * the empty boxes with it. Only listed for a background that is not paper-white; min/max are 0, values empty.
    */
   blank?: boolean;
+  /** Simple mode: the symbols standing for this colour, in reading order (min = max = rank of the first). */
+  symbols?: string[];
 }
 
 export type PuzzleError =
   /** More distinct colours used than distinct results achievable with the chosen ops/limits. */
   | { code: 'tooManyColors'; colorsUsed: number; resultsAvailable: number }
+  /** Simple mode: more colours used than the symbol set has symbols. */
+  | { code: 'tooFewSymbols'; colorsUsed: number; symbolsAvailable: number }
   | { code: 'noOps' };
 
 export type PuzzleResult =
@@ -113,6 +126,8 @@ export type PuzzleResult =
       ok: true;
       /** Same order/length as design.cells; null = blank cell (background with blankBackground on). */
       expressions: (Expression | null)[];
+      /** Simple mode only: the symbol per cell (null = blank); `expressions` are then all null. */
+      symbols?: (string | null)[];
       /** One entry per colour actually used in the design, in palette order. Result sets are disjoint. */
       legend: LegendEntry[];
     }

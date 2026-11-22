@@ -88,7 +88,7 @@ export function solveReducer(state: SolveState, action: SolveAction): SolveState
  */
 export function solveTargets(cells: readonly string[], puzzle: Extract<PuzzleResult, { ok: true }>): (string | null)[] {
   const blankColors = new Set(puzzle.legend.filter((e) => e.blank).map((e) => e.colorId));
-  return cells.map((id, i) => (puzzle.expressions[i] || blankColors.has(id) ? id : null));
+  return cells.map((id, i) => (puzzle.expressions[i] || puzzle.symbols?.[i] || blankColors.has(id) ? id : null));
 }
 
 /** Coloured cells among those that need colouring. */

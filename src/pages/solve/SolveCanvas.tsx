@@ -13,6 +13,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { Icon } from '../../components/Icon';
+import type { PictogramId } from '../../core/symbols';
 import { useDevicePixelRatio } from '../editor/useDevicePixelRatio';
 import { t } from '../../i18n';
 import { createTextCache, drawBoard, type TextCache } from './drawBoard';
@@ -51,6 +52,8 @@ interface Props {
   cols: number;
   rows: number;
   labels: string[];
+  /** Simple mode with pictures: drawn instead of a label. */
+  pictograms: (PictogramId | null)[] | null;
   fills: (string | null)[];
   wrong: boolean[] | null;
   ariaLabel: string;
@@ -75,7 +78,7 @@ const ZOOM_STEP = 1.25;
 /** Space kept around the keyboard cursor when scrolling it into view. */
 const REVEAL_MARGIN = 8;
 
-export function SolveCanvas({ cols, rows, labels, fills, wrong, ariaLabel, stroke, keys }: Props) {
+export function SolveCanvas({ cols, rows, labels, pictograms, fills, wrong, ariaLabel, stroke, keys }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const text = useRef<TextCache>(createTextCache());
@@ -123,7 +126,7 @@ export function SolveCanvas({ cols, rows, labels, fills, wrong, ariaLabel, strok
       layout,
       cellPx: px,
     };
-    drawBoard(canvas, { ...frameData, cols, rows, labels, fills, wrong, cursor: shownCursor }, text.current);
+    drawBoard(canvas, { ...frameData, cols, rows, labels, pictograms, fills, wrong, cursor: shownCursor }, text.current);
   };
 
   const scheduleDraw = () => {

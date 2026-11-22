@@ -1,4 +1,5 @@
 import { Icon } from '../../components/Icon';
+import { SymbolTiles } from '../../components/SymbolTiles';
 import { t } from '../../i18n';
 import type { LegendItem } from '../puzzle/legend';
 
@@ -24,7 +25,7 @@ export function LegendBar({ items, tool, onSelect }: { items: LegendItem[]; tool
               <span className="swatch" style={{ background: item.hex }} aria-hidden="true" />
               <span className="solve-legend-text">
                 <span className="solve-legend-name">{item.name}</span>
-                <span className="solve-legend-values">{item.values}</span>
+                <span className="solve-legend-values">{item.symbols ? <SymbolTiles symbols={item.symbols} /> : item.values}</span>
               </span>
             </button>
           );

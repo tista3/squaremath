@@ -1,6 +1,7 @@
 // OWNER: core-puzzle agent. Pure, deterministic puzzle generation.
 import { isPaperColor } from './colors';
 import { createRng, mixSeed, type Rng } from './rng';
+import { assignSymbols, placeSymbols, symbolCapacity, symbolRank, type SimpleSettings } from './symbols';
 import {
   ADD_SUB_LIMITS,
   ALL_OPS,
@@ -32,6 +33,7 @@ import {
 
 const LEGEND_SALT = 0x1e6e7d;
 const CELL_SALT = 0xce11;
+const SYMBOL_SALT = 0x5b01;
 
 /** A colour wants enough distinct expressions per op that each one appears about this often. */
 const TARGET_REPEATS = 2;
@@ -197,6 +199,8 @@ export function maxColorsFor(s: PuzzleSettings): number {
 /** Generate the puzzle for a design. Deterministic in (design.cells, palette ids, design.puzzle). */
 export function generatePuzzle(design: Design): PuzzleResult {
   const settings = clampPuzzleSettings(design.puzzle);
+  const { simple } = design.puzzle;
+  if (simple?.on) return generateSimplePuzzle(design, settings, simple);
   if (settings.ops.length === 0) return { ok: false, error: { code: 'noOps' } };
 
   const space = buildSpace(settings);
@@ -227,6 +231,27 @@ export function generatePuzzle(design: Design): PuzzleResult {
     return { colorId, min: shown[0], max: shown[shown.length - 1], values: shown };
   });
   return { ok: true, expressions, legend: [...legend, ...blankEntries] };
+}
+
+/** Simple mode: the same colour classes and blank background, with a symbol instead of a sum in each cell. */
+function generateSimplePuzzle(design: Design, settings: PuzzleSettings, simple: SimpleSettings): PuzzleResult {
+  const blankId = settings.blankBackground ? design.backgroundId : null;
+  const { colorIds, counts, classOf } = collectClasses(design, blankId);
+  const sets = assignSymbols(counts, simple, createRng(mixSeed(settings.seed, SYMBOL_SALT)));
+  if (!sets) {
+    const symbolsAvailable = symbolCapacity(simple.set);
+    return { ok: false, error: { code: 'tooFewSymbols', colorsUsed: colorIds.length, symbolsAvailable } };
+  }
+  const legend = colorIds.map((colorId, c): LegendEntry => {
+    const rank = symbolRank(sets[c][0]);
+    return { colorId, min: rank, max: rank, values: [], symbols: sets[c] };
+  });
+  return {
+    ok: true,
+    expressions: design.cells.map(() => null),
+    symbols: placeSymbols(classOf, sets, mixSeed(settings.seed, SYMBOL_SALT, CELL_SALT)),
+    legend: [...legend, ...blankLegend(design, blankId)],
+  };
 }
 
 /**

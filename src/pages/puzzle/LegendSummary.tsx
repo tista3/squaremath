@@ -1,3 +1,4 @@
+import { SymbolTiles } from '../../components/SymbolTiles';
 import type { Design, LegendEntry } from '../../core/types';
 import { t } from '../../i18n';
 import { legendItems } from './legend';
@@ -12,7 +13,7 @@ export function LegendSummary({ design, legend }: { design: Design; legend: Lege
           <li key={item.colorId}>
             <span className="swatch" style={{ background: item.hex }} aria-hidden="true" />
             <span className="puzzle-legend-name">{item.name}</span>
-            <span className="puzzle-legend-values">{item.values}</span>
+            <span className="puzzle-legend-values">{item.symbols ? <SymbolTiles symbols={item.symbols} /> : item.values}</span>
           </li>
         ))}
       </ul>

@@ -27,7 +27,9 @@ export class PuzzleGenerationError extends Error {
     super(
       error.code === 'tooManyColors'
         ? `Too many colours (${error.colorsUsed}) for the chosen numbers (${error.resultsAvailable} results available)`
-        : 'No operation selected',
+        : error.code === 'tooFewSymbols'
+          ? `Too many colours (${error.colorsUsed}) for the symbol set (${error.symbolsAvailable} symbols)`
+          : 'No operation selected',
     );
     this.name = 'PuzzleGenerationError';
     this.error = error;

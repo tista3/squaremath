@@ -1,5 +1,7 @@
 import { Icon } from '../../components/Icon';
+import { SymbolTiles } from '../../components/SymbolTiles';
 import { randomSeed } from '../../core/puzzle';
+import { DEFAULT_SIMPLE } from '../../core/symbols';
 import {
   ADD_SUB_LIMITS,
   ALL_OPS,
@@ -12,6 +14,7 @@ import {
 import { t } from '../../i18n';
 import { LimitPicker } from './LimitPicker';
 import { Field, Segmented } from './Segmented';
+import { SimpleSettingsFields } from './SimpleSettingsFields';
 import { ADD_SUB_PRESETS, MUL_DIV_PRESETS, toggleOp, usesAddSub, usesMulDiv } from './settings';
 
 interface Props {
@@ -24,10 +27,10 @@ export function SettingsPanel({ design, update }: Props) {
   const setPrint = (patch: Partial<PrintSettings>) => update((d) => ({ ...d, print: { ...d.print, ...patch } }));
   return (
     <section className="panel stack puzzle-settings" aria-label={t('puzzle.settings')}>
-      <h2 className="puzzle-h2">{t('puzzle.mathTitle')}</h2>
-      <MathSettings design={design} setPuzzle={setPuzzle} />
+      <h2 className="puzzle-h2">{t('puzzle.puzzleTitle')}</h2>
+      <PuzzleOptions design={design} setPuzzle={setPuzzle} />
       <h2 className="puzzle-h2">{t('puzzle.printTitle')}</h2>
-      <PrintOptions print={design.print} setPrint={setPrint} />
+      <PrintOptions print={design.print} simple={!!design.puzzle.simple?.on} setPrint={setPrint} />
     </section>
   );
 }
@@ -35,8 +38,65 @@ export function SettingsPanel({ design, update }: Props) {
 /** Canonical glyphs: the toggles name operations; the printed × / ÷ style is chosen under Printing. */
 const OP_GLYPHS: Record<Op, string> = { add: '+', sub: '−', mul: '×', div: '÷' };
 
-function MathSettings({ design, setPuzzle }: { design: Design; setPuzzle: (p: Partial<PuzzleSettings>) => void }) {
+type SetPuzzle = (p: Partial<PuzzleSettings>) => void;
+
+function PuzzleOptions({ design, setPuzzle }: { design: Design; setPuzzle: SetPuzzle }) {
   const p = design.puzzle;
+  const simple = p.simple ?? DEFAULT_SIMPLE;
+  return (
+    <>
+      <Segmented
+        className="puzzle-mode"
+        label={t('puzzle.mode')}
+        value={simple.on ? 'simple' : 'math'}
+        onChange={(mode) => setPuzzle({ simple: { ...simple, on: mode === 'simple' } })}
+        options={[
+          {
+            value: 'math',
+            label: (
+              <>
+                <SymbolLabel text="2 + 3" /> {t('puzzle.modeMath')}
+              </>
+            ),
+            title: t('puzzle.modeMathTitle'),
+            ariaLabel: t('puzzle.modeMath'),
+          },
+          {
+            value: 'simple',
+            label: (
+              <>
+                <SymbolTiles symbols={['A', 'star']} /> {t('puzzle.modeSimple')}
+              </>
+            ),
+            title: t('puzzle.modeSimpleTitle'),
+            ariaLabel: t('puzzle.modeSimple'),
+          },
+        ]}
+      />
+      {simple.on ? (
+        <SimpleSettingsFields value={simple} onChange={(next) => setPuzzle({ simple: next })} />
+      ) : (
+        <MathSettings settings={p} setPuzzle={setPuzzle} />
+      )}
+      <Toggle
+        label={t('puzzle.blankBackground', { name: backgroundName(design) })}
+        title={t('puzzle.blankBackgroundTitle')}
+        checked={p.blankBackground}
+        onChange={(blankBackground) => setPuzzle({ blankBackground })}
+      />
+      <button
+        type="button"
+        className="btn big puzzle-dice"
+        title={t(simple.on ? 'puzzle.newSimpleTitle' : 'puzzle.newPuzzleTitle')}
+        onClick={() => setPuzzle({ seed: randomSeed() })}
+      >
+        <Icon name="dice" /> {t('puzzle.newPuzzle')}
+      </button>
+    </>
+  );
+}
+
+function MathSettings({ settings: p, setPuzzle }: { settings: PuzzleSettings; setPuzzle: SetPuzzle }) {
   return (
     <>
       <Field label={t('puzzle.operations')}>
@@ -99,20 +159,20 @@ function MathSettings({ design, setPuzzle }: { design: Design; setPuzzle: (p: Pa
           ]}
         />
       </Field>
-      <Toggle
-        label={t('puzzle.blankBackground', { name: backgroundName(design) })}
-        title={t('puzzle.blankBackgroundTitle')}
-        checked={p.blankBackground}
-        onChange={(blankBackground) => setPuzzle({ blankBackground })}
-      />
-      <button type="button" className="btn big puzzle-dice" title={t('puzzle.newPuzzleTitle')} onClick={() => setPuzzle({ seed: randomSeed() })}>
-        <Icon name="dice" /> {t('puzzle.newPuzzle')}
-      </button>
     </>
   );
 }
 
-function PrintOptions({ print, setPrint }: { print: PrintSettings; setPrint: (p: Partial<PrintSettings>) => void }) {
+function PrintOptions({
+  print,
+  simple,
+  setPrint,
+}: {
+  print: PrintSettings;
+  /** Simple puzzles print no sums, so there are no signs to choose. */
+  simple: boolean;
+  setPrint: (p: Partial<PrintSettings>) => void;
+}) {
   return (
     <>
       <Field label={t('puzzle.paper')}>
@@ -158,30 +218,32 @@ function PrintOptions({ print, setPrint }: { print: PrintSettings; setPrint: (p:
           ]}
         />
       </Field>
-      <div className="puzzle-symbols">
-        <Field label={t('puzzle.divSymbol')}>
-          <Segmented
-            label={t('puzzle.divSymbol')}
-            value={print.divSymbol}
-            onChange={(divSymbol) => setPrint({ divSymbol })}
-            options={[
-              { value: '÷', label: '÷' },
-              { value: ':', label: ':' },
-            ]}
-          />
-        </Field>
-        <Field label={t('puzzle.mulSymbol')}>
-          <Segmented
-            label={t('puzzle.mulSymbol')}
-            value={print.mulSymbol}
-            onChange={(mulSymbol) => setPrint({ mulSymbol })}
-            options={[
-              { value: '×', label: '×' },
-              { value: '·', label: '·' },
-            ]}
-          />
-        </Field>
-      </div>
+      {!simple && (
+        <div className="puzzle-symbols">
+          <Field label={t('puzzle.divSymbol')}>
+            <Segmented
+              label={t('puzzle.divSymbol')}
+              value={print.divSymbol}
+              onChange={(divSymbol) => setPrint({ divSymbol })}
+              options={[
+                { value: '÷', label: '÷' },
+                { value: ':', label: ':' },
+              ]}
+            />
+          </Field>
+          <Field label={t('puzzle.mulSymbol')}>
+            <Segmented
+              label={t('puzzle.mulSymbol')}
+              value={print.mulSymbol}
+              onChange={(mulSymbol) => setPrint({ mulSymbol })}
+              options={[
+                { value: '×', label: '×' },
+                { value: '·', label: '·' },
+              ]}
+            />
+          </Field>
+        </div>
+      )}
       <Toggle label={t('puzzle.showTitle')} checked={print.showTitle} onChange={(showTitle) => setPrint({ showTitle })} />
       <Toggle label={t('puzzle.includeSolution')} checked={print.includeSolution} onChange={(includeSolution) => setPrint({ includeSolution })} />
       <Toggle label={t('puzzle.legendSwatches')} checked={print.legendSwatches} onChange={(legendSwatches) => setPrint({ legendSwatches })} />

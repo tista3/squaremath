@@ -473,6 +473,32 @@ input[type='range'] {
   font-size: 1rem;
 }
 
+/* Simple-mode symbols, boxed like the squares on the sheet. */
+.symbol-tiles {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  vertical-align: middle;
+}
+
+.symbol-tile {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 2px;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.symbol-tile .pictogram {
+  width: 22px;
+  height: 22px;
+}
+
 .warning,
 .error {
   display: flex;

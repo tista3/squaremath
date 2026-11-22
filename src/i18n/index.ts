@@ -10,6 +10,7 @@ import puzzle from './en/puzzle';
 import solve from './en/solve';
 import shared from './en/shared';
 import photo from './en/photo';
+import symbols from './en/symbols';
 
 type Dict = Record<string, string>;
 
@@ -22,7 +23,7 @@ function flatten(namespaces: Record<string, Dict>): Dict {
 }
 
 const LANGS: Record<string, Dict> = {
-  en: flatten({ common, gallery, editor, puzzle, solve, shared, photo }),
+  en: flatten({ common, gallery, editor, puzzle, solve, shared, photo, symbols }),
 };
 
 let currentLang = 'en';

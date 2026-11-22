@@ -41,6 +41,8 @@ export function progressKey(d: Design): string {
     p.mulDivMax,
     p.legendMode,
     p.seed,
+    // Added only in simple mode, so progress saved on maths puzzles keeps its key.
+    ...(p.simple?.on ? [`simple:${p.simple.set}:${p.simple.perColor}`] : []),
     // Which cells must be coloured depends on the blank background and whether it is paper-white.
     p.blankBackground ? `blank:${d.backgroundId}:${d.palette.find((c) => c.id === d.backgroundId)?.hex ?? ''}` : '',
   ].join('|');

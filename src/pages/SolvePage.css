@@ -412,6 +412,22 @@
     overflow-wrap: anywhere;
   }
 
+  /* Two boxes side by side in the narrow colour buttons. */
+  .solve-legend-colors .symbol-tiles {
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .solve-legend-colors .symbol-tile {
+    min-width: 24px;
+    height: 24px;
+  }
+
+  .solve-legend-colors .symbol-tile .pictogram {
+    width: 19px;
+    height: 19px;
+  }
+
   .solve-legend > .solve-eraser {
     width: 64px;
     min-height: 64px;

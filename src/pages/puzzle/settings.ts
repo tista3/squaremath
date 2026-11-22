@@ -1,4 +1,5 @@
 // Pure helpers for the puzzle settings UI (presets, op toggling, quick fixes, sanitising carried settings).
+import { cleanSimple, symbolCapacity, type SimpleSettings, type SymbolSet } from '../../core/symbols';
 import {
   ADD_SUB_LIMITS,
   ALL_OPS,
@@ -81,6 +82,13 @@ export function quickFixes(
   return fixes;
 }
 
+/** Sets to offer when `set` cannot give `needed` symbols: a bigger one of the same kind first, then numbers. */
+export function biggerSets({ set }: SimpleSettings, needed: number): SymbolSet[] {
+  const pictures = set !== 'upper' && set !== 'lower';
+  const candidates: SymbolSet[] = pictures ? ['mixed', 'numbers'] : ['numbers'];
+  return candidates.filter((s) => s !== set && symbolCapacity(s) >= needed);
+}
+
 function range(from: number, to: number): number[] {
   const out: number[] = [];
   for (let v = from; v <= to; v++) out.push(v);
@@ -97,6 +105,7 @@ function boolOr(value: unknown, fallback: boolean): boolean {
 
 function sanitizePuzzle(raw: Record<string, unknown>, fallback: PuzzleSettings): PuzzleSettings {
   const ops = Array.isArray(raw.ops) ? ALL_OPS.filter((o) => (raw.ops as unknown[]).includes(o)) : [];
+  const simple = cleanSimple(raw.simple) ?? fallback.simple;
   const seed = typeof raw.seed === 'number' && Number.isFinite(raw.seed) ? raw.seed >>> 0 : fallback.seed;
   return {
     ops: ops.length ? ops : fallback.ops,
@@ -105,6 +114,7 @@ function sanitizePuzzle(raw: Record<string, unknown>, fallback: PuzzleSettings):
     legendMode: oneOf(raw.legendMode, ['range', 'value'] as const, fallback.legendMode),
     seed,
     blankBackground: boolOr(raw.blankBackground, fallback.blankBackground),
+    ...(simple && { simple }),
   };
 }
 
