@@ -33,7 +33,7 @@ const TITLE_FS = 6;
 const TITLE_MIN_FS = 3.5;
 const NAME_LINE_W = 60;
 const CHECK_W = 6;
-const GRID_LEGEND_GAP = 6;
+const GRID_LEGEND_GAP = 4.5;
 
 const CELL_LINE_W = 0.2;
 const BORDER_W = 0.5;
@@ -49,10 +49,15 @@ const TWO_LINE_GAIN = 1.2;
 export const LEGEND_FS = 4;
 const LEGEND_LINE_H = 5;
 const SWATCH = 5.5;
-const SWATCH_GAP = 2.5;
+const SWATCH_GAP = 1.5;
 const SWATCH_STROKE = 0.35;
-const LEGEND_ROW_GAP = 2.5;
-const LEGEND_COL_GAP = 6;
+/** Each key entry is framed, so entries stay apart without colours too. */
+const LEGEND_PAD_X = 1.2;
+const LEGEND_PAD_Y = 0.6;
+const LEGEND_FRAME_W = 0.25;
+const LEGEND_FRAME_R = 1.2;
+const LEGEND_ROW_GAP = 1.2;
+const LEGEND_COL_GAP = 2.5;
 const LEGEND_COL_MIN = 36;
 
 /** Simple mode: key symbols sit in little boxes, like the squares of the grid. */
@@ -173,11 +178,11 @@ interface LegendItem {
   symbols?: string[];
 }
 
-/** One printed line of a legend entry: (part of) the bold name and/or values. */
+/** One printed line of a legend entry: values or symbols and/or (part of) the bold name after them. */
 interface LegendLine {
-  name: string;
   values: string;
   symbols: string[];
+  name: string;
 }
 
 interface WrappedItem extends LegendItem {
@@ -189,6 +194,8 @@ interface PlacedItem {
   item: WrappedItem;
   x: number;
   y: number;
+  /** Frame height, shared by the entries of a row. */
+  h: number;
 }
 
 interface LegendBlock {
@@ -225,10 +232,10 @@ function usedColorItems(design: Design): LegendItem[] {
   return design.palette.filter((c) => used.has(c.id)).map((c) => ({ name: c.name, hex: c.hex, values: '' }));
 }
 
-const TEXT_X = SWATCH + SWATCH_GAP;
+const TEXT_X = LEGEND_PAD_X + SWATCH + SWATCH_GAP;
 
 function nameWidth(item: LegendItem): number {
-  return TEXT_X + textWidth(item.name, LEGEND_FS, true);
+  return TEXT_X + textWidth(item.name, LEGEND_FS, true) + LEGEND_PAD_X;
 }
 
 function itemWidth(item: LegendItem): number {
@@ -267,37 +274,44 @@ function wrapWords(text: string, maxW: number, bold: boolean): string[] {
 }
 
 /**
- * Fits an entry into a column: the bold name (wrapped only if it is wider than the column on its own), then
- * the values ("6, 12, 15") or symbol boxes after it, continuing on further lines when they do not fit.
+ * Fits an entry into a column: the values ("6, 12, 15") or symbol boxes right after the colour box, wrapped
+ * when they do not fit, then the bold name (on lines of its own when there is no room left for it).
  */
 function wrapItem(item: LegendItem, colW: number): WrappedItem {
-  const textW = colW - TEXT_X;
-  const names = textWidth(item.name, LEGEND_FS, true) <= textW ? [item.name] : wrapWords(item.name, textW, true);
-  const lines: LegendLine[] = names.map((name) => ({ name, values: '', symbols: [] }));
-  let line = lines[lines.length - 1];
-  let used = textWidth(line.name, LEGEND_FS, true);
+  const textW = colW - TEXT_X - LEGEND_PAD_X;
+  let line: LegendLine = { values: '', symbols: [], name: '' };
+  const lines = [line];
+  let used = 0;
+  const newLine = () => {
+    line = { values: '', symbols: [], name: '' };
+    lines.push(line);
+    used = 0;
+  };
   for (const token of item.values ? item.values.split(/(?<=,)\s+/) : []) {
-    const add = textWidth(` ${token}`, LEGEND_FS);
-    if (used + add > textW) {
-      line = { name: '', values: token, symbols: [] };
-      lines.push(line);
-      used = textWidth(token, LEGEND_FS);
-    } else {
-      line.values = line.values ? `${line.values} ${token}` : token;
-      used += add;
-    }
+    if (used > 0 && used + textWidth(` ${token}`, LEGEND_FS) > textW) newLine();
+    const text = line.values ? ` ${token}` : token;
+    line.values += text;
+    used += textWidth(text, LEGEND_FS);
   }
-  if (!item.symbols) return { ...item, lines, h: Math.max(SWATCH, lines.length * LEGEND_LINE_H) };
-  for (const symbol of item.symbols) {
-    if (used + KEY_BOX_STEP > textW) {
-      line = { name: '', values: '', symbols: [] };
-      lines.push(line);
-      used = 0;
-    }
+  for (const symbol of item.symbols ?? []) {
+    if (used > 0 && used + KEY_BOX_STEP > textW) newLine();
     line.symbols.push(symbol);
     used += KEY_BOX_STEP;
   }
-  return { ...item, lines, h: lines.length * KEY_BOX_STEP - KEY_BOX_GAP };
+
+  const space = line.values ? ' ' : '';
+  if (used + textWidth(space + item.name, LEGEND_FS, true) <= textW) {
+    line.name = item.name;
+  } else {
+    for (const name of wrapWords(item.name, textW, true)) {
+      if (used > 0) newLine();
+      line.name = name;
+      used = textWidth(name, LEGEND_FS, true);
+    }
+  }
+
+  const contentH = item.symbols ? lines.length * KEY_BOX_STEP - KEY_BOX_GAP : Math.max(SWATCH, lines.length * LEGEND_LINE_H);
+  return { ...item, lines, h: contentH + 2 * LEGEND_PAD_Y };
 }
 
 /**
@@ -324,8 +338,9 @@ function arrangeLegend(items: WrappedItem[], colW: number, cols: number): Legend
   let y = 0;
   for (let i = 0; i < items.length; i += cols) {
     const row = items.slice(i, i + cols);
-    row.forEach((item, c) => placed.push({ item, x: c * (colW + LEGEND_COL_GAP), y }));
-    y += Math.max(...row.map((it) => it.h)) + LEGEND_ROW_GAP;
+    const h = Math.max(...row.map((it) => it.h));
+    row.forEach((item, c) => placed.push({ item, x: c * (colW + LEGEND_COL_GAP), y, h }));
+    y += h + LEGEND_ROW_GAP;
   }
   const usedCols = Math.min(cols, items.length);
   return {
@@ -705,40 +720,48 @@ function keyBoxSvg(symbol: string, x: number, cy: number): string {
   return `${box}<text x="${n(cx)}" y="${n(baseline)}" font-size="${KEY_BOX_FS}" text-anchor="middle" fill="${SYMBOL_INK}">${escapeXml(symbol)}</text>`;
 }
 
-/** Simple-mode key entry: colour box, name, then the boxed symbols (wrapped as wrapItem decided). */
+/** Simple-mode key entry: colour box, the boxed symbols (wrapped as wrapItem decided), then the name. */
 function symbolItemSvg({ item, x, y }: PlacedItem, filled: boolean): string {
   const tx = x + TEXT_X;
-  const out = [swatchSvg(item, x, y + (KEY_BOX - SWATCH) / 2, filled)];
+  const top = y + LEGEND_PAD_Y;
+  const out = [swatchSvg(item, x + LEGEND_PAD_X, top + (KEY_BOX - SWATCH) / 2, filled)];
   item.lines.forEach((line, i) => {
-    const cy = y + KEY_BOX / 2 + i * KEY_BOX_STEP;
-    let bx = tx;
-    if (line.name) {
-      out.push(`<text x="${n(tx)}" y="${n(cy + BASELINE_SHIFT * LEGEND_FS)}" font-weight="bold">${escapeXml(line.name)}</text>`);
-      bx += textWidth(line.name, LEGEND_FS, true) + KEY_BOX_GAP;
-    }
-    line.symbols.forEach((symbol, k) => out.push(keyBoxSvg(symbol, bx + k * KEY_BOX_STEP, cy)));
+    const cy = top + KEY_BOX / 2 + i * KEY_BOX_STEP;
+    line.symbols.forEach((symbol, k) => out.push(keyBoxSvg(symbol, tx + k * KEY_BOX_STEP, cy)));
+    if (!line.name) return;
+    const nameX = tx + line.symbols.length * KEY_BOX_STEP;
+    out.push(`<text x="${n(nameX)}" y="${n(cy + BASELINE_SHIFT * LEGEND_FS)}" font-weight="bold">${escapeXml(line.name)}</text>`);
   });
   return out.join('');
 }
 
-function legendItemSvg(placed: PlacedItem, filled: boolean): string {
-  const { item, x, y } = placed;
-  if (item.symbols) return symbolItemSvg(placed, filled);
+/** Maths key entry: colour box, the values, then the name. */
+function valueItemSvg({ item, x, y }: PlacedItem, filled: boolean): string {
   const tx = x + TEXT_X;
-  const baseline = y + SWATCH / 2 + BASELINE_SHIFT * LEGEND_FS;
+  const top = y + LEGEND_PAD_Y;
+  const baseline = top + SWATCH / 2 + BASELINE_SHIFT * LEGEND_FS;
   const lines = item.lines.map((line, i) => {
     const pos = i === 0 ? '' : ` x="${n(tx)}" dy="${LEGEND_LINE_H}"`;
-    const name = line.name ? `<tspan${pos} font-weight="bold">${escapeXml(line.name)}</tspan>` : '';
-    if (!line.values) return name;
-    const values = escapeXml(line.name ? ` ${line.values}` : line.values);
-    return `${name}<tspan${line.name ? '' : pos}>${values}</tspan>`;
+    const values = line.values ? `<tspan${pos}>${escapeXml(line.values)}</tspan>` : '';
+    if (!line.name) return values;
+    const name = escapeXml(line.values ? ` ${line.name}` : line.name);
+    return `${values}<tspan${line.values ? '' : pos} font-weight="bold">${name}</tspan>`;
   });
-  return `${swatchSvg(item, x, y, filled)}<text x="${n(tx)}" y="${n(baseline)}">${lines.join('')}</text>`;
+  return `${swatchSvg(item, x + LEGEND_PAD_X, top, filled)}<text x="${n(tx)}" y="${n(baseline)}">${lines.join('')}</text>`;
+}
+
+function legendItemSvg(placed: PlacedItem, colW: number, filled: boolean): string {
+  const { item, x, y, h } = placed;
+  const frame =
+    `<rect class="key-entry" x="${n(x)}" y="${n(y)}" width="${n(colW)}" height="${n(h)}" rx="${LEGEND_FRAME_R}" ` +
+    `fill="none" stroke="#000" stroke-width="${LEGEND_FRAME_W}"/>`;
+  return frame + (item.symbols ? symbolItemSvg(placed, filled) : valueItemSvg(placed, filled));
 }
 
 function legendSvg(layout: SheetLayout, filled: boolean): string {
-  const items = layout.legend.placed.map((p) =>
-    legendItemSvg({ ...p, x: layout.legendX + p.x, y: layout.legendY + p.y }, filled),
+  const { colW, placed } = layout.legend;
+  const items = placed.map((p) =>
+    legendItemSvg({ ...p, x: layout.legendX + p.x, y: layout.legendY + p.y }, colW, filled),
   );
   return `<g class="legend" font-size="${LEGEND_FS}" fill="#000">${items.join('')}</g>`;
 }
@@ -788,7 +811,7 @@ function puzzlePages(design: Design, puzzle: OkPuzzle, plan: SheetPlan): string[
 
 /**
  * The sheet exactly as printed / exported, one SVG per page (xmlns set, width/height in mm, viewBox in mm).
- * 'puzzle': B/W grid with expressions + legend (colour name + values/range); big grids are split over
+ * 'puzzle': B/W grid with expressions + legend (values/range + colour name); big grids are split over
  * several pages (see sheetPageCount). 'solution': one page, coloured grid + legend with swatches.
  */
 export function renderSheetPages(design: Design, puzzle: OkPuzzle, kind: SheetKind): string[] {

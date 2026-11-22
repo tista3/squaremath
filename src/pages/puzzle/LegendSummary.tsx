@@ -12,8 +12,10 @@ export function LegendSummary({ design, legend }: { design: Design; legend: Lege
         {items.map((item) => (
           <li key={item.colorId}>
             <span className="swatch" style={{ background: item.hex }} aria-hidden="true" />
-            <span className="puzzle-legend-name">{item.name}</span>
-            <span className="puzzle-legend-values">{item.symbols ? <SymbolTiles symbols={item.symbols} /> : item.values}</span>
+            <span className="puzzle-legend-text">
+              <span className="puzzle-legend-values">{item.symbols ? <SymbolTiles symbols={item.symbols} /> : item.values}</span>
+              <span className="puzzle-legend-name">{item.name}</span>
+            </span>
           </li>
         ))}
       </ul>

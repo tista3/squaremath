@@ -19,8 +19,8 @@ one by sending a link.
 - **Named colours.** Printed sheets are black and white, so every palette colour has an English
   name. It is suggested from the colour and you can edit it ("Red", "Sky blue", "Grandma's sofa").
 - **Puzzles.** Choose addition, subtraction, multiplication, division or any mix. Set the number
-  limits and choose between a legend of ranges ("Red 1–10") and a legend of exact values
-  ("Red 3, 7, 12"). Press the dice for a new set of sums. The generator spreads the operations over
+  limits and choose between a legend of ranges ("1–10 Red") and a legend of exact values
+  ("3, 7, 12 Red"). Press the dice for a new set of sums. The generator spreads the operations over
   all colours and avoids repeating sums; for extreme settings (tiny limits, many colours) the Puzzle
   page explains what makes the sheet dull or easy to guess and offers a one-tap fix.
 - **Simple mode.** On the Puzzle page, switch from Maths to Simple: there are no sums, each symbol is

@@ -206,13 +206,13 @@ describe('legend', () => {
   it('lists range entries in number order, not palette order', () => {
     const d = makeDesign(6, 6);
     const doc = parse(renderSheetSVG(d, mockPuzzle(d), 'puzzle'));
-    expect(legendEntryTexts(doc)).toEqual(['White 1–10', 'Red 11–20']);
+    expect(legendEntryTexts(doc)).toEqual(['1–10 White', '11–20 Red']);
   });
 
   it('lists exact-value entries by their smallest value', () => {
     const d = makeDesign(6, 6, { puzzle: { ...DEFAULT_PUZZLE, legendMode: 'value' } });
     const doc = parse(renderSheetSVG(d, mockPuzzle(d), 'puzzle'));
-    expect(legendEntryTexts(doc).map((t) => t.split(' ')[0])).toEqual(['White', 'Red']);
+    expect(legendEntryTexts(doc).map((t) => t.split(' ').at(-1))).toEqual(['White', 'Red']);
   });
 
   it.each([
@@ -229,6 +229,61 @@ describe('legend', () => {
             expect(line.x).toBeGreaterThanOrEqual(MARGIN);
             expect(line.x + line.width, `${line.text} (${size}×${size}, ${legendMode})`).toBeLessThanOrEqual(w - MARGIN + 1e-6);
           }
+        }
+      }
+    }
+  });
+
+  it.each(['range', 'value', 'simple'] as const)('frames every entry apart, with its value next to its colour box: %s', (mode) => {
+    const simple = mode === 'simple';
+    const puzzle: PuzzleSettings = simple
+      ? { ...DEFAULT_PUZZLE, simple: { on: true, set: 'numbers', perColor: 3 } }
+      : { ...DEFAULT_PUZZLE, legendMode: mode };
+    const d = manyColors(12, NAMES_24, { puzzle });
+    const mock = mockPuzzle(d);
+    const legend = mock.legend.map((e, i) => (simple ? { ...e, symbols: [`${i}`, `${i + 30}`, `${i + 60}`] } : e));
+    const doc = parse(renderSheetSVG(d, { ...mock, legend }, 'puzzle'));
+    const frames = [...doc.querySelectorAll('g.legend > rect.key-entry')];
+    expect(frames).toHaveLength(NAMES_24.length);
+
+    const box = (el: Element) => {
+      const [x, y, w, h] = ['x', 'y', 'width', 'height'].map((a) => Number(el.getAttribute(a)));
+      return { x, y, right: x + w, bottom: y + h };
+    };
+    frames.map(box).forEach((a, i, all) => {
+      for (const b of all.slice(i + 1)) {
+        expect(a.right < b.x || b.right < a.x || a.bottom < b.y || b.bottom < a.y).toBe(true);
+      }
+    });
+
+    for (const frame of frames) {
+      const outer = box(frame);
+      const swatch = frame.nextElementSibling!;
+      const value = swatch.nextElementSibling!;
+      expect(Number(value.getAttribute('x')) - box(swatch).right).toBeLessThan(2);
+      if (simple) expect(value.classList.contains('key-box')).toBe(true);
+      else expect(value.firstElementChild?.getAttribute('font-weight')).toBeNull(); // not the bold name
+
+      for (let el = frame.nextElementSibling; el && !el.classList.contains('key-entry'); el = el.nextElementSibling) {
+        const x = Number(el.getAttribute('x'));
+        let y = Number(el.getAttribute('y'));
+        expect(y).toBeGreaterThan(outer.y);
+        if (el.localName === 'rect') {
+          expect(box(el).right).toBeLessThan(outer.right);
+          expect(box(el).bottom).toBeLessThan(outer.bottom);
+          continue;
+        }
+        const fs = Number(el.getAttribute('font-size') ?? LEGEND_FS);
+        let width = 0;
+        for (const run of el.children.length ? el.children : [el]) {
+          if (run.hasAttribute('dy')) {
+            width = 0;
+            y += Number(run.getAttribute('dy'));
+          }
+          width += textWidth(run.textContent ?? '', fs, run.getAttribute('font-weight') === 'bold');
+          const right = x + (el.getAttribute('text-anchor') === 'middle' ? width / 2 : width);
+          expect(right).toBeLessThanOrEqual(outer.right);
+          expect(y).toBeLessThan(outer.bottom);
         }
       }
     }

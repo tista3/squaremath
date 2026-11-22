@@ -282,33 +282,41 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 6px 16px;
+  gap: 6px;
 }
 
-/* The colour name is the key information: it keeps its width, the numbers wrap below it if needed. */
+/* Framed like the entries of the printed key. */
 .puzzle-legend li {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 2px 8px;
+  gap: 6px;
   min-width: 0;
+  padding: 4px 6px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 .puzzle-legend .swatch {
   flex: none;
 }
 
+/* Values come first, right beside their colour; the name follows, or wraps below them. */
+.puzzle-legend-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-width: 0;
+}
+
 .puzzle-legend-name {
-  flex: 0 1 auto;
   min-width: 0;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .puzzle-legend-values {
-  flex: 1 1 auto;
-  margin-left: auto;
-  text-align: right;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
   color: var(--muted, #475569);
 }

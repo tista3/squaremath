@@ -65,9 +65,9 @@ describe('parseSheetSvg', () => {
     const all = texts(ops);
     expect(all).toContain('Bird');
     expect(all.some((t) => /^\d+ – \d+$/.test(t))).toBe(true); // "12 − 7" drawn with an en dash
-    expect(all.some((t) => t.startsWith('Red '))).toBe(true); // bold name and values on one line
-    const legendLine = ops.find((op) => op.kind === 'text' && op.chunks[0].runs[0].text === 'Red');
-    expect(legendLine && legendLine.kind === 'text' && legendLine.chunks[0].runs.map((r) => r.bold)).toEqual([true, false]);
+    expect(all.some((t) => t.endsWith(' Red'))).toBe(true); // values and bold name on one line
+    const legendLine = ops.find((op) => op.kind === 'text' && op.chunks[0].runs.at(-1)?.text === ' Red');
+    expect(legendLine && legendLine.kind === 'text' && legendLine.chunks[0].runs.map((r) => r.bold)).toEqual([false, true]);
   });
 
   it('centres grid expressions and keeps the coloured fills of the solution', () => {
@@ -94,7 +94,7 @@ describe('drawOps', () => {
     drawOps(doc, parseSheetSvg(sheet(makeDesign({ name: 'Bird' }))));
     const pdf = doc.output();
     expect(pdf).toContain('(Bird) Tj');
-    expect(pdf).toContain('(Red) Tj');
+    expect(pdf).toContain('( Red) Tj');
     expect(pdf).not.toContain('/Subtype /Image');
   });
 });
