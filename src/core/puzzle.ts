@@ -1,4 +1,5 @@
 // OWNER: core-puzzle agent. Pure, deterministic puzzle generation.
+import { blockCells, HARD_BLOCK_AREA, resolveBlocks, tileBlocks } from './blocks';
 import { isPaperColor } from './colors';
 import { createRng, mixSeed, type Rng } from './rng';
 import { assignSymbols, placeSymbols, symbolCapacity, symbolRank, type SimpleSettings } from './symbols';
@@ -7,6 +8,7 @@ import {
   ALL_OPS,
   DEFAULT_PUZZLE,
   MUL_DIV_LIMITS,
+  type Block,
   type Design,
   type Expression,
   type LegendEntry,
@@ -63,6 +65,8 @@ const VALUE_GAIN_POWER = 3;
 const SAMPLES_PER_OP = 8;
 const TRIVIAL_PENALTY = 8;
 const ADJACENT_PENALTY = 4;
+/** A big block that gets a plain two-number sum, because its result has no three-number one. */
+const CHAIN_MISS_PENALTY = 6;
 /** × log2(1 + uses beyond the op's planned repeats in the colour, OpChoice.repeats): spreads cells evenly over the expressions. */
 const USAGE_PENALTY = 1.0;
 /** share·cells/supply can land a hair above a whole number (2.0000000000000004); don't round that up. */
@@ -103,6 +107,8 @@ interface Space {
   mulNice: Uint8Array;
   /** Sorted union of all selected ops' results. */
   results: number[];
+  /** mulDivChains results by (op, op2, v), filled on first use. */
+  chains: Map<string, Expression[]>;
 }
 
 /** pairs[o][i] = nicePairCount(space.ops[o], space.results[i]). */
@@ -158,32 +164,52 @@ export function clampPuzzleSettings(s: PuzzleSettings): PuzzleSettings {
   };
 }
 
-/** Value of `a op b` (division is exact for generated expressions). */
-export function evaluateExpression(e: Pick<Expression, 'a' | 'b' | 'op'>): number {
-  switch (e.op) {
+type Operands = Pick<Expression, 'a' | 'b' | 'op' | 'op2' | 'c'>;
+
+function apply(op: Op, x: number, y: number): number {
+  switch (op) {
     case 'add':
-      return e.a + e.b;
+      return x + y;
     case 'sub':
-      return e.a - e.b;
+      return x - y;
     case 'mul':
-      return e.a * e.b;
+      return x * y;
     case 'div':
-      return e.a / e.b;
+      return x / y;
   }
 }
 
-/** ×1, 1×, ÷1, x÷x and x−x: expressions a child can answer without calculating. */
-export function isTrivialExpression(e: Pick<Expression, 'a' | 'b' | 'op'>): boolean {
-  switch (e.op) {
+/** Value of `a op b` or `a op b op2 c`, worked left to right (division is exact for generated expressions). */
+export function evaluateExpression(e: Operands): number {
+  const first = apply(e.op, e.a, e.b);
+  return e.op2 === undefined || e.c === undefined ? first : apply(e.op2, first, e.c);
+}
+
+function isTrivialStep(op: Op, x: number, y: number): boolean {
+  switch (op) {
     case 'add':
       return false;
     case 'sub':
-      return e.a === e.b;
+      return x === y;
     case 'mul':
-      return e.a === 1 || e.b === 1;
+      return x === 1 || y === 1;
     case 'div':
-      return e.b === 1 || e.a === e.b;
+      return y === 1 || x === y;
   }
+}
+
+const INVERSE: Record<Op, Op> = { add: 'sub', sub: 'add', mul: 'div', div: 'mul' };
+
+/**
+ * ×1, 1×, ÷1, x÷x and x−x: expressions a child can answer without calculating. A three-number expression is
+ * trivial when one of its steps is, or when its second step undoes the first (7 + 5 − 5, 7 + 5 − 7, 6 × 4 ÷ 4).
+ */
+export function isTrivialExpression(e: Operands): boolean {
+  if (isTrivialStep(e.op, e.a, e.b)) return true;
+  if (e.op2 === undefined || e.c === undefined) return false;
+  if (isTrivialStep(e.op2, apply(e.op, e.a, e.b), e.c)) return true;
+  const commutative = e.op === 'add' || e.op === 'mul';
+  return e.op2 === INVERSE[e.op] && (e.c === e.b || (commutative && e.c === e.a));
 }
 
 /** Sorted distinct results achievable with the given ops & limits. */
@@ -205,7 +231,7 @@ export function generatePuzzle(design: Design): PuzzleResult {
 
   const space = buildSpace(settings);
   const blankId = settings.blankBackground ? design.backgroundId : null;
-  const { colorIds, counts, classOf } = collectClasses(design, blankId);
+  const { colorIds, classOf } = collectClasses(design, blankId);
   const k = colorIds.length;
   if (k > space.results.length) {
     return { ok: false, error: { code: 'tooManyColors', colorsUsed: k, resultsAvailable: space.results.length } };
@@ -213,6 +239,8 @@ export function generatePuzzle(design: Design): PuzzleResult {
   const blankEntries = blankLegend(design, blankId);
   if (k === 0) return { ok: true, expressions: design.cells.map(() => null), legend: blankEntries };
 
+  // Everything below counts units (one sum each): blocks when they are on, otherwise single cells.
+  const { units, blocks, counts } = collectUnits(design, classOf, k, settings.seed);
   const legendRng = createRng(mixSeed(settings.seed, LEGEND_SALT, k, space.results.length));
   const pairs = pairTable(space);
   const valueSets =
@@ -221,7 +249,8 @@ export function generatePuzzle(design: Design): PuzzleResult {
       : assignValues(space, pairs, counts, legendRng);
   const classes = colorIds.map((colorId, c) => buildClass(space, colorId, valueSets[c]));
   assignOpShares(classes, counts);
-  const expressions = generateExpressions(space, design, classes, classOf, settings.seed);
+  const hardArea = blocks && resolveBlocks(design).harderSums ? HARD_BLOCK_AREA : Infinity;
+  const expressions = generateExpressions(space, design, classes, classOf, units, hardArea, settings.seed);
 
   // Value mode lists exact numbers, so it only lists the ones some cell really produces.
   const used = classes.map(() => new Set<number>());
@@ -230,13 +259,14 @@ export function generatePuzzle(design: Design): PuzzleResult {
     const shown = settings.legendMode === 'value' ? values.filter((v) => used[c].has(v)) : values;
     return { colorId, min: shown[0], max: shown[shown.length - 1], values: shown };
   });
-  return { ok: true, expressions, legend: [...legend, ...blankEntries] };
+  return { ok: true, expressions, legend: [...legend, ...blankEntries], ...(blocks && { blocks }) };
 }
 
 /** Simple mode: the same colour classes and blank background, with a symbol instead of a sum in each cell. */
 function generateSimplePuzzle(design: Design, settings: PuzzleSettings, simple: SimpleSettings): PuzzleResult {
   const blankId = settings.blankBackground ? design.backgroundId : null;
-  const { colorIds, counts, classOf } = collectClasses(design, blankId);
+  const { colorIds, classOf } = collectClasses(design, blankId);
+  const { units, blocks, counts } = collectUnits(design, classOf, colorIds.length, settings.seed);
   const sets = assignSymbols(counts, simple, createRng(mixSeed(settings.seed, SYMBOL_SALT)));
   if (!sets) {
     const symbolsAvailable = symbolCapacity(simple.set);
@@ -246,12 +276,48 @@ function generateSimplePuzzle(design: Design, settings: PuzzleSettings, simple: 
     const rank = symbolRank(sets[c][0]);
     return { colorId, min: rank, max: rank, values: [], symbols: sets[c] };
   });
+  const placed = placeSymbols(
+    units.map((u) => classOf[u.cells[0]]),
+    sets,
+    mixSeed(settings.seed, SYMBOL_SALT, CELL_SALT),
+  );
+  const symbols = design.cells.map((): string | null => null);
+  units.forEach((u, k) => u.cells.forEach((i) => (symbols[i] = placed[k])));
   return {
     ok: true,
     expressions: design.cells.map(() => null),
-    symbols: placeSymbols(classOf, sets, mixSeed(settings.seed, SYMBOL_SALT, CELL_SALT)),
+    symbols,
     legend: [...legend, ...blankLegend(design, blankId)],
+    ...(blocks && { blocks }),
   };
+}
+
+/** Cells that share one expression or symbol: a block, or a single cell when blocks are off. */
+interface Unit {
+  /** Row-major; the first one is the top-left cell. */
+  cells: number[];
+}
+
+/**
+ * The units of the puzzle in reading order, with the number of units per colour class. Without blocks every
+ * non-blank cell is a unit of its own, so such puzzles are exactly what they were before blocks existed.
+ */
+function collectUnits(
+  design: Design,
+  classOf: Int32Array,
+  classCount: number,
+  seed: number,
+): { units: Unit[]; blocks: Block[] | null; counts: number[] } {
+  const counts = new Array<number>(classCount).fill(0);
+  const settings = resolveBlocks(design);
+  const width = design.width > 0 ? design.width : design.cells.length;
+  const height = Math.floor(design.cells.length / width);
+  const blocks = settings.on ? tileBlocks(width, height, classOf, settings.hideOutline, seed) : null;
+  const units: Unit[] = blocks
+    ? blocks.map((b) => ({ cells: blockCells(width, b) }))
+    : Array.from(classOf, (c, i) => (c < 0 ? null : { cells: [i] })).filter((u): u is Unit => u !== null);
+  for (const u of units) counts[classOf[u.cells[0]]]++;
+  return { units, blocks, counts };
 }
 
 /**
@@ -271,8 +337,11 @@ function blankLegend(design: Design, blankId: string | null): LegendEntry[] {
  */
 export function puzzleWarnings(design: Design, result: PuzzleResult): PuzzleWarning[] {
   if (!result.ok) return [];
-  // Blank cells have no expression; the indices below refer to the remaining (puzzle) cells.
-  const puzzleCells = result.expressions.flatMap((e, i) => (e ? [i] : []));
+  // Blank cells have no expression; the indices below refer to the remaining (puzzle) cells, one per block
+  // when there are blocks (the counts in the warnings are then counts of sums, not of squares).
+  const puzzleCells = result.blocks
+    ? result.blocks.map((b) => b.y * design.width + b.x).filter((i) => result.expressions[i])
+    : result.expressions.flatMap((e, i) => (e ? [i] : []));
   if (puzzleCells.length === 0) return [];
   const expressions = puzzleCells.map((i) => result.expressions[i]!);
   const cellColor = puzzleCells.map((i) => design.cells[i]);
@@ -302,7 +371,7 @@ export function puzzleWarnings(design: Design, result: PuzzleResult): PuzzleWarn
 
   if (ops.length < 2) return warnings;
   for (const op of ops) {
-    const indices = expressions.flatMap((e, i) => (e.op === op ? [i] : []));
+    const indices = expressions.flatMap((e, i) => (e.op === op || e.op2 === op ? [i] : []));
     if (cells >= WARN_MIN_CELLS_FOR_SHARES && indices.length < cells * WARN_MIN_OP_SHARE) {
       warnings.push({ code: 'opImbalance', op, count: indices.length, cells });
     }
@@ -314,10 +383,11 @@ export function puzzleWarnings(design: Design, result: PuzzleResult): PuzzleWarn
   return warnings;
 }
 
-/** "12 + 7", "15 − 8" (U+2212 minus), "6 × 4" / "6 · 4", "24 ÷ 6" / "24 : 6". No "= ?". */
+/** "12 + 7", "15 − 8" (U+2212 minus), "6 × 4" / "6 · 4", "24 ÷ 6" / "24 : 6", "12 + 7 − 5". No "= ?". */
 export function formatExpression(e: Expression, p: Pick<PrintSettings, 'divSymbol' | 'mulSymbol'>): string {
-  const symbol = { add: '+', sub: '−', mul: p.mulSymbol, div: p.divSymbol }[e.op];
-  return `${e.a} ${symbol} ${e.b}`;
+  const symbols = { add: '+', sub: '−', mul: p.mulSymbol, div: p.divSymbol };
+  const first = `${e.a} ${symbols[e.op]} ${e.b}`;
+  return e.op2 === undefined || e.c === undefined ? first : `${first} ${symbols[e.op2]} ${e.c}`;
 }
 
 /** Shown instead of numbers for a blank legend entry ("colour the empty boxes"); language-neutral. */
@@ -356,7 +426,7 @@ function buildSpace(s: PuzzleSettings): Space {
       if (a >= 2 && b >= 2) mulNice[a * b] = 1;
     }
   }
-  const space: Space = { ops: s.ops, addSubMax: n, mulDivMax: m, mulAny, mulNice, results: [] };
+  const space: Space = { ops: s.ops, addSubMax: n, mulDivMax: m, mulAny, mulNice, results: [], chains: new Map() };
   const top = Math.max(n, m * m);
   for (let v = 0; v <= top; v++) {
     if (space.ops.some((op) => reaches(space, op, v))) space.results.push(v);
@@ -463,24 +533,15 @@ function sampleOperands(space: Space, op: Op, v: number, nice: boolean, rng: Rng
  * Colour ids that get expressions (palette order; unknown ids appended defensively; `blankId` left out) and
  * the per-cell class index (−1 for blank cells).
  */
-function collectClasses(
-  design: Design,
-  blankId: string | null,
-): { colorIds: string[]; counts: number[]; classOf: Int32Array } {
+function collectClasses(design: Design, blankId: string | null): { colorIds: string[]; classOf: Int32Array } {
   const used = new Set(design.cells);
   if (blankId !== null) used.delete(blankId);
   const colorIds = design.palette.map((p) => p.id).filter((id) => used.has(id));
   for (const id of used) if (!colorIds.includes(id)) colorIds.push(id);
 
   const index = new Map(colorIds.map((id, i) => [id, i]));
-  const counts = new Array<number>(colorIds.length).fill(0);
-  const classOf = new Int32Array(design.cells.length);
-  design.cells.forEach((id, i) => {
-    const c = index.get(id) ?? -1;
-    classOf[i] = c;
-    if (c >= 0) counts[c]++;
-  });
-  return { colorIds, counts, classOf };
+  const classOf = Int32Array.from(design.cells, (id) => index.get(id) ?? -1);
+  return { colorIds, classOf };
 }
 
 /** Class indices, most cells first (ties by palette order). */
@@ -829,11 +890,17 @@ interface CellState {
   classPlaced: number[];
 }
 
+/**
+ * One expression per unit, in reading order; every cell of a unit gets the unit's expression (null for blank
+ * cells). Units of at least `hardArea` cells get a three-number expression where one exists.
+ */
 function generateExpressions(
   space: Space,
   design: Design,
   classes: ColorClass[],
   classOf: Int32Array,
+  units: Unit[],
+  hardArea: number,
   seed: number,
 ): (Expression | null)[] {
   const width = design.width > 0 ? design.width : design.cells.length;
@@ -844,21 +911,13 @@ function generateExpressions(
     classOpCounts: classes.map(() => ALL_OPS.map(() => 0)),
     classPlaced: classes.map(() => 0),
   };
-  const expressions: (Expression | null)[] = [];
-  for (let i = 0; i < design.cells.length; i++) {
+  const expressions: (Expression | null)[] = design.cells.map(() => null);
+  for (const unit of units) {
+    const i = unit.cells[0];
     const c = classOf[i];
-    if (c < 0) {
-      expressions.push(null); // blank background cell
-      continue;
-    }
-    // Row-major order: comparing with the left and upper cell covers every orthogonal pair once.
-    const neighbours: Expression[] = [];
-    const left = i % width > 0 ? expressions[i - 1] : null;
-    const up = i >= width ? expressions[i - width] : null;
-    if (left) neighbours.push(left);
-    if (up) neighbours.push(up);
     const rng = createRng(mixSeed(seed, CELL_SALT, i));
-    const expr = chooseExpression(space, classes[c], c, neighbours, state, rng);
+    const hard = unit.cells.length >= hardArea;
+    const expr = chooseExpression(space, classes[c], c, placedNeighbours(unit, width, expressions), state, rng, hard);
     const key = expressionKey(expr);
     const o = ALL_OPS.indexOf(expr.op);
     state.usage.set(key, (state.usage.get(key) ?? 0) + 1);
@@ -866,15 +925,46 @@ function generateExpressions(
     for (const choice of classes[c].choices) state.opExpected[ALL_OPS.indexOf(choice.op)] += choice.share;
     state.classOpCounts[c][o]++;
     state.classPlaced[c]++;
-    expressions.push(expr);
+    for (const j of unit.cells) expressions[j] = expr;
   }
   return expressions;
+}
+
+/**
+ * Expressions of the units touching `unit` that are already placed; with units in reading order this covers
+ * every touching pair once. A single cell needs no search: below it nothing is placed yet, and to its right
+ * only a block that started on a row above (without blocks: never).
+ */
+function placedNeighbours(unit: Unit, width: number, expressions: (Expression | null)[]): Expression[] {
+  if (unit.cells.length === 1) {
+    const i = unit.cells[0];
+    const out: Expression[] = [];
+    const left = i % width > 0 ? expressions[i - 1] : null;
+    const up = i >= width ? expressions[i - width] : null;
+    const right = i % width < width - 1 ? expressions[i + 1] : null;
+    if (left) out.push(left);
+    if (up) out.push(up);
+    if (right) out.push(right);
+    return out;
+  }
+  const found = new Set<Expression>();
+  const own = new Set(unit.cells);
+  for (const j of unit.cells) {
+    const x = j % width;
+    for (const n of [x > 0 ? j - 1 : -1, j - width, x < width - 1 ? j + 1 : -1, j + width]) {
+      const e = n >= 0 && n < expressions.length && !own.has(n) ? expressions[n] : null;
+      if (e) found.add(e);
+    }
+  }
+  return [...found];
 }
 
 /**
  * Samples a few candidates for every op the class can use (ops in random order, results weighted by their
  * number of nice expressions) and keeps the one with the lowest penalty: trivial ≫ repeats a neighbour >
  * op above its fair share of the sheet / colour ≈ expression already used often. Stops at a perfect one.
+ * For a `hard` unit the candidates are three-number expressions starting with the op (see sampleChain); a
+ * plain two-number one is only taken, with CHAIN_MISS_PENALTY, when the result has no such expression.
  */
 function chooseExpression(
   space: Space,
@@ -883,6 +973,7 @@ function chooseExpression(
   neighbours: Expression[],
   state: CellState,
   rng: Rng,
+  hard = false,
 ): Expression {
   const placedInClass = state.classPlaced[classIndex];
   const excess = (count: number, fair: number) => Math.min(MAX_OP_EXCESS, Math.max(0, (count + 1) / (fair + 1) - 1));
@@ -898,11 +989,18 @@ function chooseExpression(
     const nice = choice.nice.length > 0;
     for (let s = 0; s < SAMPLES_PER_OP && bestPenalty >= TIE_JITTER; s++) {
       const result = nice ? choice.nice[pickCumulative(choice.cumulative, rng)] : rng.pick(choice.all);
-      const [a, b] = sampleOperands(space, choice.op, result, nice, rng);
-      const expr: Expression = { a, b, op: choice.op, result };
+      const chain = hard ? sampleChain(space, choice.op, result, rng) : null;
+      let expr: Expression;
+      if (chain) {
+        expr = chain;
+      } else {
+        const [a, b] = sampleOperands(space, choice.op, result, nice, rng);
+        expr = { a, b, op: choice.op, result };
+      }
       const uses = state.usage.get(expressionKey(expr)) ?? 0;
       const penalty =
         opPenalty +
+        (hard && !chain ? CHAIN_MISS_PENALTY : 0) +
         (nice ? 0 : TRIVIAL_PENALTY) +
         (neighbours.some((n) => sameExpression(n, expr)) ? ADJACENT_PENALTY : 0) +
         USAGE_PENALTY * Math.log2(1 + Math.max(0, uses + 1 - Math.ceil(choice.repeats - REPEATS_EPSILON))) +
@@ -929,11 +1027,93 @@ function pickCumulative(cumulative: Float64Array, rng: Rng): number {
   return lo;
 }
 
-/** Unique number per (op, a, b); operands stay below 2048 (a ≤ max(N, M²) ≤ 1000). */
-function expressionKey(e: Pick<Expression, 'a' | 'b' | 'op'>): number {
-  return (ALL_OPS.indexOf(e.op) * 2048 + e.a) * 2048 + e.b;
+/**
+ * Unique number per (op, a, b) or (op, a, b, op2, c); operands stay below 2048 (a ≤ max(N, M²) ≤ 1000) and the
+ * largest key, about 5 · 4 · 2048³ ≈ 1.7 · 10¹¹, is far below 2⁵³.
+ */
+function expressionKey(e: Operands): number {
+  const second = e.op2 === undefined ? 0 : ALL_OPS.indexOf(e.op2) + 1;
+  return (((second * 4 + ALL_OPS.indexOf(e.op)) * 2048 + e.a) * 2048 + e.b) * 2048 + (e.c ?? 0);
 }
 
 function sameExpression(x: Expression, y: Expression): boolean {
-  return x.op === y.op && x.a === y.a && x.b === y.b;
+  return x.op === y.op && x.a === y.a && x.b === y.b && x.op2 === y.op2 && x.c === y.c;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Three-number expressions (big blocks with blocks.harderSums)
+
+/** Ops of the same kind as `op` (+ − or × ÷) among the selected ones, so a chain never mixes precedence. */
+function sameKindOps(space: Space, op: Op): Op[] {
+  const kind: Op[] = op === 'add' || op === 'sub' ? ['add', 'sub'] : ['mul', 'div'];
+  return space.ops.filter((o) => kind.includes(o));
+}
+
+/**
+ * A random non-trivial `a op b op2 c` worked out to `v` (op2 a selected op of the same kind), or null when
+ * there is none. Every step keeps to the limits of a single expression with its op: + − stay within
+ * 0..addSubMax, × ÷ use factors and divisors 2..mulDivMax and dividends up to mulDivMax².
+ */
+function sampleChain(space: Space, op: Op, v: number, rng: Rng): Expression | null {
+  const seconds = rng.shuffle(sameKindOps(space, op));
+  for (const op2 of seconds) {
+    const chain = op === 'add' || op === 'sub' ? addSubChain(space, op, op2, v, rng) : mulDivChain(space, op, op2, v, rng);
+    if (chain) return chain;
+  }
+  return null;
+}
+
+/** Tries per (op, op2) before giving up on a result (a random third number can make the chain trivial or easy). */
+const CHAIN_TRIES = 8;
+
+function addSubChain(space: Space, op: Op, op2: Op, v: number, rng: Rng): Expression | null {
+  const n = space.addSubMax;
+  // First result r: a + b needs r ≥ 2, a − b needs 1 ≤ r ≤ N − 1 (no x − x).
+  const minR = op === 'add' ? 2 : 1;
+  const maxR = op === 'add' ? n : n - 1;
+  // r + c = v or r − c = v, with c ≥ 1.
+  const [lo, hi] = op2 === 'add' ? [Math.max(1, v - maxR), v - minR] : [Math.max(1, minR - v), maxR - v];
+  if (hi < lo) return null;
+  // Adding or taking away 1 makes a long sum easy: avoided while the result allows it.
+  const cLo = hi >= 2 ? Math.max(lo, 2) : lo;
+  let fallback: Expression | null = null;
+  for (let t = 0; t < CHAIN_TRIES; t++) {
+    const c = rng.int(cLo, hi);
+    const r = op2 === 'add' ? v - c : v + c;
+    const [a, b] = sampleOperands(space, op, r, true, rng);
+    const expr: Expression = { a, b, op, op2, c, result: v };
+    if (isTrivialExpression(expr)) continue;
+    if (a > 1 && b > 1) return expr;
+    fallback ??= expr;
+  }
+  return fallback;
+}
+
+function mulDivChain(space: Space, op: Op, op2: Op, v: number, rng: Rng): Expression | null {
+  const key = `${op}${op2}${v}`;
+  let options = space.chains.get(key);
+  if (!options) {
+    options = mulDivChains(space, op, op2, v).filter((e) => !isTrivialExpression(e));
+    space.chains.set(key, options);
+  }
+  return options.length ? { ...rng.pick(options) } : null;
+}
+
+/** Every `a op b op2 c = v` with × and ÷ (operands 2..M, dividends ≤ M²); at most (M − 1)² of them. */
+function mulDivChains(space: Space, op: Op, op2: Op, v: number): Expression[] {
+  const m = space.mulDivMax;
+  const out: Expression[] = [];
+  const add = (a: number, b: number, c: number) => {
+    if (Number.isInteger(c) && c >= 2 && c <= m) out.push({ a, b, op, op2, c, result: v });
+  };
+  if (v < 1) return out;
+  for (let x = 2; x <= m; x++) {
+    for (let y = 2; y <= m; y++) {
+      if (op === 'mul' && op2 === 'mul') add(x, y, v / (x * y)); // x × y × c
+      else if (op === 'mul') add(x, y, (x * y) / v); // x × y ÷ c
+      else if (op2 === 'mul') add(x * y, y, v / x); // (x·y) ÷ y × c: quotient x
+      else if (v * x * y <= m * m) add(v * x * y, x, y); // (v·x·y) ÷ x ÷ y
+    }
+  }
+  return out;
 }

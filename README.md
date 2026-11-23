@@ -28,6 +28,11 @@ one by sending a link.
   food, vehicles) or mixed pictures, and whether one symbol or a group of up to four means the same
   colour. Small puzzles avoid look-alike letters, and when a set is too small for the picture the page
   offers a bigger one.
+- **Blocks.** Big pictures have hundreds of squares, so touching squares of the same colour can be joined
+  into blocks of up to 3×3 that share one sum (or symbol). This is on by default for grids bigger than
+  24×24 and usually cuts the number of sums by more than half. Blocks of four or more squares get a longer sum
+  with three numbers (12 + 7 − 5), and "Hide the outline" mixes big and small blocks so the block edges do
+  not give the picture away. On screen, tapping a block colours all of it.
 - **Print, PDF and PNG.** A puzzle sheet without colours, plus the legend (in number order, with
   colours that share a name numbered "Blue (1)", "Blue (2)") and an optional solution page, on A4 or
   Letter. Big grids are split over up to 3×3 pages, with row and column numbers, so every square stays

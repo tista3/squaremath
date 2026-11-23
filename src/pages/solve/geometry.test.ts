@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BLOCK_LABEL_GAIN,
   BOARD_PAD,
   LABEL_FILL,
   MAX_CELL_PX,
@@ -12,6 +13,7 @@ import {
   fitCellPx,
   initialCellPx,
   labelLayout,
+  labelLayoutBox,
   lineCells,
   moveCursor,
   revealScroll,
@@ -155,5 +157,19 @@ describe('splitLabel', () => {
   it('stacks "a op b" on two lines', () => {
     expect(splitLabel('12 + 7')).toEqual(['12', '+ 7']);
     expect(splitLabel('42')).toEqual(['42']);
+  });
+});
+
+describe('blocks', () => {
+  it('stacks a three-number sum after its first step', () => {
+    expect(splitLabel('12 + 7 − 5')).toEqual(['12 + 7', '− 5']);
+  });
+
+  it('lays out a single cell exactly like labelLayout, and lets a block grow only up to its cap', () => {
+    const m = { single: 2.2, stacked: 1.2 };
+    expect(labelLayoutBox(m, 40, 40)).toEqual(labelLayout(m, 40));
+    const block = labelLayoutBox(m, 120, 120, BLOCK_LABEL_GAIN * 40 * 0.4);
+    expect(block.fontPx).toBeGreaterThan(labelLayout(m, 40).fontPx);
+    expect(block.fontPx).toBeLessThanOrEqual(BLOCK_LABEL_GAIN * 40 * 0.4);
   });
 });

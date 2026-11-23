@@ -3,9 +3,11 @@
 // Text is measured with Helvetica/Arial glyph widths (./textMetrics) because the SVG is built as a string
 // without a DOM. Puzzles whose squares would be too small to read on one page are split over several pages
 // ("tiles") with row/column numbers; the key is repeated on every page so a child never has to flip.
-// Pictograms of simple mode are flattened paths (./pictograms).
+// Pictograms of simple mode are flattened paths (./pictograms). With blocks, each block shows its sum once, in
+// its middle; a block cut by a page edge shows it on both pages.
 // The SVG only uses rect, path and text/tspan with plain hex colours, so export/pdf can redraw it as vectors.
-import type { Design, LegendEntry, PaperSize, PuzzleResult } from '../core/types';
+import { blockIndex } from '../core/blocks';
+import type { Block, Design, LegendEntry, PaperSize, PuzzleResult } from '../core/types';
 import { formatExpression, formatLegendValues, generatePuzzle } from '../core/puzzle';
 import { isPictogram, type PictogramId } from '../core/symbols';
 import { distinctNames, sortLegendForDisplay } from './legendOrder';
@@ -40,6 +42,13 @@ const BORDER_W = 0.5;
 const CELL_TEXT_FILL = 0.86;
 const EXPR_MAX_FS = 8;
 const EXPR_LINE_H = 1.15;
+/** Blocks: their edges, and the faint lines between the squares inside them. */
+const BLOCK_LINE_W = 0.3;
+const BLOCK_LINE = '#333333';
+const INNER_LINE_W = 0.15;
+const INNER_LINE = '#c4c4c4';
+/** Text in a block may grow to this many times the text of a single square (pictograms: their size). */
+const BLOCK_GAIN = 1.25;
 /** Two-line cells are only used when one line would be smaller than this (≈ 9 pt)… */
 const EXPR_COMFORT_FS = 3.2;
 /** …and two lines make the text clearly bigger. */
@@ -602,8 +611,10 @@ interface ExprStyle {
   twoLines: boolean;
 }
 
-/** Splits "12 + 7" into ["12 +", "7"]; texts without a space stay on one line. */
+/** Splits "12 + 7" into ["12 +", "7"] and "12 + 7 − 5" into ["12 + 7", "− 5"]; texts without a space stay on one line. */
 function splitExpression(text: string): string[] {
+  const parts = text.split(' ');
+  if (parts.length === 5) return [parts.slice(0, 3).join(' '), parts.slice(3).join(' ')];
   const i = text.lastIndexOf(' ');
   return i < 0 ? [text] : [text.slice(0, i), text.slice(i + 1)];
 }
@@ -614,13 +625,20 @@ function splitExpression(text: string): string[] {
  * if that is clearly larger.
  */
 function expressionStyle(texts: string[], cell: number): ExprStyle {
-  const inner = cell * CELL_TEXT_FILL;
+  return boxStyle(texts, cell, cell, EXPR_MAX_FS);
+}
+
+/** expressionStyle for a box of boxW × boxH mm (a block), with the font size capped at `maxFs`. */
+function boxStyle(texts: string[], boxW: number, boxH: number, maxFs: number): ExprStyle {
+  const innerW = boxW * CELL_TEXT_FILL;
+  const innerH = boxH * CELL_TEXT_FILL;
   const widest = (parts: string[]) => Math.max(1e-6, ...parts.map((t) => textWidth(t, 1)));
-  const oneLine = Math.min(EXPR_MAX_FS, inner / widest(texts), inner / EXPR_LINE_H);
-  const twoLine = Math.min(EXPR_MAX_FS, inner / widest(texts.flatMap(splitExpression)), inner / (2 * EXPR_LINE_H));
+  const oneLine = Math.min(maxFs, innerW / widest(texts), innerH / EXPR_LINE_H);
+  const twoLine = Math.min(maxFs, innerW / widest(texts.flatMap(splitExpression)), innerH / (2 * EXPR_LINE_H));
   const useTwo = oneLine < EXPR_COMFORT_FS && twoLine > oneLine * TWO_LINE_GAIN;
   return useTwo ? { fs: twoLine, twoLines: true } : { fs: oneLine, twoLines: false };
 }
+
 
 function expressionText(text: string, cx: number, cy: number, style: ExprStyle): string {
   const shift = BASELINE_SHIFT * style.fs;
@@ -647,6 +665,87 @@ function expressionsSvg(design: Design, texts: string[], style: ExprStyle, layou
   return `<g font-size="${n(style.fs)}" text-anchor="middle" fill="${ink}">${out.join('')}</g>`;
 }
 
+/** The part of a block on one page, in squares relative to the page's region. */
+interface Piece {
+  block: Block;
+  c: number;
+  r: number;
+  w: number;
+  h: number;
+}
+
+function piecesIn(blocks: readonly Block[], region: Region): Piece[] {
+  const out: Piece[] = [];
+  for (const block of blocks) {
+    const x0 = Math.max(block.x, region.col0);
+    const y0 = Math.max(block.y, region.row0);
+    const x1 = Math.min(block.x + block.w, region.col0 + region.cols);
+    const y1 = Math.min(block.y + block.h, region.row0 + region.rows);
+    if (x1 > x0 && y1 > y0) out.push({ block, c: x0 - region.col0, r: y0 - region.row0, w: x1 - x0, h: y1 - y0 });
+  }
+  return out;
+}
+
+/** Text styles of a puzzle with blocks. */
+interface BlockStyles {
+  /** Single squares: the style every two-number sum would have in a square, so they all match. */
+  single: ExprStyle;
+  /** Bigger blocks: one style per shape ("2x3"), from the texts of all blocks of that shape. */
+  shapes: Map<string, ExprStyle>;
+  /** Font size limit of the bigger blocks (BLOCK_GAIN × the single squares' size). */
+  maxFs: number;
+}
+
+/**
+ * Text styles for blocks. Two-number sums set the size, so a sheet looks the same with or without blocks;
+ * bigger blocks grow their text only a little beyond that, and long sums shrink to fit their block.
+ */
+function blockStyles(design: Design, texts: string[], blocks: readonly Block[], cell: number): BlockStyles {
+  const all = texts.filter(Boolean);
+  const short = all.filter((t) => t.split(' ').length <= 3);
+  const single = expressionStyle(short.length ? short : all, cell);
+  const maxFs = Math.min(EXPR_MAX_FS, BLOCK_GAIN * single.fs);
+  const byShape = new Map<string, string[]>();
+  for (const b of blocks) {
+    const text = texts[b.y * design.width + b.x];
+    if (!text || b.w * b.h === 1) continue;
+    const key = `${b.w}x${b.h}`;
+    const list = byShape.get(key);
+    if (list) list.push(text);
+    else byShape.set(key, [text]);
+  }
+  const shapes = new Map<string, ExprStyle>();
+  for (const [key, list] of byShape) {
+    const [w, h] = key.split('x').map(Number);
+    shapes.set(key, boxStyle(list, w * cell, h * cell, maxFs));
+  }
+  return { single, shapes, maxFs };
+}
+
+/** Block texts on one page, grouped by font size; a block cut by the page edge gets a style of its own. */
+function blockTextsSvg(design: Design, texts: string[], styles: BlockStyles, layout: SheetLayout, pieces: Piece[], ink: string): string {
+  const { cell } = layout;
+  const groups = new Map<string, string[]>();
+  for (const { block, c, r, w, h } of pieces) {
+    const text = texts[block.y * design.width + block.x];
+    if (!text) continue;
+    const whole = w === block.w && h === block.h;
+    const style =
+      w * h === 1 && text.split(' ').length <= 3
+        ? styles.single
+        : (whole && styles.shapes.get(`${w}x${h}`)) || boxStyle([text], w * cell, h * cell, styles.maxFs);
+    const cx = layout.gridX + (c + w / 2) * cell;
+    const cy = layout.gridY + (r + h / 2) * cell;
+    const fs = n(style.fs);
+    const list = groups.get(fs);
+    const svg = expressionText(text, cx, cy, style);
+    if (list) list.push(svg);
+    else groups.set(fs, [svg]);
+  }
+  const out = [...groups].map(([fs, list]) => `<g font-size="${fs}">${list.join('')}</g>`);
+  return `<g text-anchor="middle" fill="${ink}">${out.join('')}</g>`;
+}
+
 /** A pictogram centred on (cx, cy): plain M/L/Z paths, so export/pdf draws it as vectors. */
 function pictogramSvg(id: PictogramId, cx: number, cy: number, size: number): string {
   const { line, dots } = getPictogram(id);
@@ -660,9 +759,25 @@ function pictogramSvg(id: PictogramId, cx: number, cy: number, size: number): st
   return outline + (dots.length ? `<path d="${pictogramPath(dots, x, y, scale)}" fill="${SYMBOL_INK}"/>` : '');
 }
 
-function pictogramsSvg(design: Design, symbols: readonly (string | null)[], layout: SheetLayout, region: Region): string {
+function pictogramsSvg(
+  design: Design,
+  symbols: readonly (string | null)[],
+  layout: SheetLayout,
+  region: Region,
+  blocks?: readonly Block[],
+): string {
   const size = Math.min(PICTO_MAX, layout.cell * PICTO_FILL);
   const out: string[] = [];
+  if (blocks) {
+    for (const { block, c, r, w, h } of piecesIn(blocks, region)) {
+      const symbol = symbols[block.y * design.width + block.x];
+      if (!symbol || !isPictogram(symbol)) continue;
+      const fit = Math.min(w, h) * layout.cell * PICTO_FILL;
+      const shown = Math.min(PICTO_MAX * (w * h > 1 ? BLOCK_GAIN : 1), fit);
+      out.push(pictogramSvg(symbol, layout.gridX + (c + w / 2) * layout.cell, layout.gridY + (r + h / 2) * layout.cell, shown));
+    }
+    return out.length ? `<g class="pictograms">${out.join('')}</g>` : '';
+  }
   for (let r = 0; r < region.rows; r++) {
     for (let c = 0; c < region.cols; c++) {
       const symbol = symbols[(region.row0 + r) * design.width + region.col0 + c];
@@ -692,10 +807,52 @@ function labelsSvg(layout: SheetLayout, region: Region): string {
   );
 }
 
-function gridFrameSvg(layout: SheetLayout, region: Region): string {
+/** Which block each cell of the design belongs to (−1 = none), for drawing the grid lines of a puzzle with blocks. */
+interface BlockMap {
+  width: number;
+  blockOf: Int32Array;
+}
+
+/**
+ * Grid lines of a puzzle with blocks: faint lines between the squares of a block, darker ones along the block
+ * edges (and around blank squares). Neighbouring segments of the same kind are merged.
+ */
+function blockLinesSvg(layout: SheetLayout, region: Region, { width, blockOf }: BlockMap): string {
+  const { gridX: x0, gridY: y0, cell } = layout;
+  const at = (r: number, c: number) => blockOf[(region.row0 + r) * width + region.col0 + c];
+  const inside = (a: number, b: number) => a >= 0 && a === b;
+  const inner: string[] = [];
+  const edges: string[] = [];
+  for (let c = 1; c < region.cols; c++) {
+    let start = 0;
+    const kindAt = (r: number) => inside(at(r, c - 1), at(r, c));
+    for (let r = 1; r <= region.rows; r++) {
+      if (r < region.rows && kindAt(r) === kindAt(start)) continue;
+      (kindAt(start) ? inner : edges).push(`M${n(x0 + c * cell)} ${n(y0 + start * cell)}V${n(y0 + r * cell)}`);
+      start = r;
+    }
+  }
+  for (let r = 1; r < region.rows; r++) {
+    let start = 0;
+    const kindAt = (c: number) => inside(at(r - 1, c), at(r, c));
+    for (let c = 1; c <= region.cols; c++) {
+      if (c < region.cols && kindAt(c) === kindAt(start)) continue;
+      (kindAt(start) ? inner : edges).push(`M${n(x0 + start * cell)} ${n(y0 + r * cell)}H${n(x0 + c * cell)}`);
+      start = c;
+    }
+  }
+  const path = (parts: string[], stroke: string, w: number) =>
+    parts.length ? `<path d="${parts.join('')}" stroke="${stroke}" stroke-width="${w}" fill="none"/>` : '';
+  return path(inner, INNER_LINE, INNER_LINE_W) + path(edges, BLOCK_LINE, BLOCK_LINE_W);
+}
+
+function gridFrameSvg(layout: SheetLayout, region: Region, blocks?: BlockMap): string {
   const { gridX: x, gridY: y, cell } = layout;
+  const lines = blocks
+    ? blockLinesSvg(layout, region, blocks)
+    : `<path d="${gridLinesPath(region.cols, region.rows, x, y, cell)}" stroke="#555" stroke-width="${CELL_LINE_W}" fill="none"/>`;
   return (
-    `<path d="${gridLinesPath(region.cols, region.rows, x, y, cell)}" stroke="#555" stroke-width="${CELL_LINE_W}" fill="none"/>` +
+    lines +
     `<rect x="${n(x)}" y="${n(y)}" width="${n(cell * region.cols)}" height="${n(cell * region.rows)}" ` +
     `fill="none" stroke="#000" stroke-width="${BORDER_W}"/>`
   );
@@ -792,15 +949,23 @@ function puzzlePages(design: Design, puzzle: OkPuzzle, plan: SheetPlan): string[
   const texts = symbols
     ? symbols.map((s) => (s && !isPictogram(s) ? s : ''))
     : puzzle.expressions.map((e) => (e ? formatExpression(e, design.print) : ''));
-  const style = expressionStyle(texts.filter(Boolean), layout.cell);
+  const ink = symbols ? SYMBOL_INK : '#000';
+  const { blocks } = puzzle;
+  const map: BlockMap | undefined = blocks && { width: design.width, blockOf: blockIndex(design.width, design.cells.length, blocks) };
+  const styles = blocks ? blockStyles(design, texts, blocks, layout.cell) : null;
+  const style = blocks ? null : expressionStyle(texts.filter(Boolean), layout.cell);
   const split = tiles.length > 1;
+  const textsSvg = (region: Region) =>
+    blocks && styles
+      ? blockTextsSvg(design, texts, styles, layout, piecesIn(blocks, region), ink)
+      : expressionsSvg(design, texts, style!, layout, region, ink);
   return tiles.map((region, index) =>
     pageSvg(
       layout.page,
       headerSvg(design, 'puzzle', layout.page.w, split ? { index, tilesX, tilesY } : null) +
-        expressionsSvg(design, texts, style, layout, region, symbols ? SYMBOL_INK : '#000') +
-        (symbols ? pictogramsSvg(design, symbols, layout, region) : '') +
-        gridFrameSvg(layout, region) +
+        textsSvg(region) +
+        (symbols ? pictogramsSvg(design, symbols, layout, region, blocks) : '') +
+        gridFrameSvg(layout, region, map) +
         (split ? labelsSvg(layout, region) : '') +
         legendSvg(layout, design.print.legendSwatches),
     ),

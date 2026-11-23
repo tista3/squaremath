@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { ConfirmDialog, IconButton } from '../../components/ui';
 import { symbolName } from '../../components/SymbolTiles';
+import { blockCells, blockIndex } from '../../core/blocks';
 import { formatExpression } from '../../core/puzzle';
 import { isPictogram } from '../../core/symbols';
-import type { Design } from '../../core/types';
+import type { Block, Design } from '../../core/types';
 import { printPuzzle } from '../../export';
 import { t } from '../../i18n';
 import type { OkPuzzle } from '../../render/sheet';
@@ -64,7 +65,15 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
 
   // What each cell must be coloured; null for blank paper-white cells, which can't be painted.
   const targets = useMemo(() => solveTargets(design.cells, puzzle), [design.cells, puzzle]);
-  const paintable = (cells: number[]) => cells.filter((cell) => targets[cell] !== null);
+  const blocks = useMemo(
+    () => (puzzle.blocks ? { list: puzzle.blocks, blockOf: blockIndex(design.width, design.cells.length, puzzle.blocks) } : null),
+    [puzzle.blocks, design.width, design.cells.length],
+  );
+  // Painting any cell of a block paints the whole block.
+  const paintable = (cells: number[]) => {
+    const all = blocks ? withBlocks(cells, design.width, blocks.list, blocks.blockOf) : cells;
+    return all.filter((cell) => targets[cell] !== null);
+  };
   const solved = isSolved(state.filled, targets);
   // Celebrate when the picture gets finished here, not every time a finished one is reopened.
   const [celebrating, setCelebrating] = useState(false);
@@ -186,6 +195,7 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
           pictograms={pictograms}
           fills={fills}
           wrong={wrong}
+          blocks={blocks}
           ariaLabel={t('solve.boardLabel', { name: design.name })}
           stroke={stroke}
           keys={keys}
@@ -226,6 +236,17 @@ export function SolveBoard({ design, puzzle, storageKey, basePath, readOnly, onS
       {share.dialog}
     </div>
   );
+}
+
+/** The cells plus every other cell of their blocks, each once. */
+function withBlocks(cells: number[], width: number, list: readonly Block[], blockOf: Int32Array): number[] {
+  const out = new Set<number>();
+  for (const cell of cells) {
+    const k = blockOf[cell] ?? -1;
+    if (k < 0) out.add(cell);
+    else for (const c of blockCells(width, list[k])) out.add(c);
+  }
+  return [...out];
 }
 
 function ProgressMeter({ done, total }: { done: number; total: number }) {

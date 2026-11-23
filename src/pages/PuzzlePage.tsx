@@ -45,7 +45,7 @@ export default function PuzzlePage(props: DesignPageProps) {
       {readOnly && <p className="muted">{t('puzzle.sharedNote')}</p>}
       <ActionBar design={design} puzzleReady={outcome.ok} onShare={share.open} onSolve={goSolve} />
       <div className="puzzle-layout">
-        <SettingsPanel design={design} update={update} />
+        <SettingsPanel design={design} outcome={outcome} update={update} />
         <section className="panel stack puzzle-preview" aria-label={t('puzzle.preview')}>
           <Segmented
             label={t('puzzle.preview')}

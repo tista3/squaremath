@@ -14,6 +14,7 @@ import {
 } from 'react';
 import { Icon } from '../../components/Icon';
 import type { PictogramId } from '../../core/symbols';
+import type { Block } from '../../core/types';
 import { useDevicePixelRatio } from '../editor/useDevicePixelRatio';
 import { t } from '../../i18n';
 import { createTextCache, drawBoard, type TextCache } from './drawBoard';
@@ -56,6 +57,8 @@ interface Props {
   pictograms: (PictogramId | null)[] | null;
   fills: (string | null)[];
   wrong: boolean[] | null;
+  /** Blocks of the puzzle and the block of each cell (−1 = none), or null without blocks. */
+  blocks: { list: readonly Block[]; blockOf: Int32Array } | null;
   ariaLabel: string;
   stroke: StrokeHandlers;
   keys: BoardKeys;
@@ -78,7 +81,7 @@ const ZOOM_STEP = 1.25;
 /** Space kept around the keyboard cursor when scrolling it into view. */
 const REVEAL_MARGIN = 8;
 
-export function SolveCanvas({ cols, rows, labels, pictograms, fills, wrong, ariaLabel, stroke, keys }: Props) {
+export function SolveCanvas({ cols, rows, labels, pictograms, fills, wrong, blocks, ariaLabel, stroke, keys }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const text = useRef<TextCache>(createTextCache());
@@ -126,7 +129,7 @@ export function SolveCanvas({ cols, rows, labels, pictograms, fills, wrong, aria
       layout,
       cellPx: px,
     };
-    drawBoard(canvas, { ...frameData, cols, rows, labels, pictograms, fills, wrong, cursor: shownCursor }, text.current);
+    drawBoard(canvas, { ...frameData, cols, rows, labels, pictograms, fills, wrong, blocks, cursor: shownCursor }, text.current);
   };
 
   const scheduleDraw = () => {

@@ -1,5 +1,6 @@
 import { Icon } from '../../components/Icon';
 import { SymbolTiles } from '../../components/SymbolTiles';
+import { HARD_BLOCK_AREA, resolveBlocks, type BlockSettings } from '../../core/blocks';
 import { randomSeed } from '../../core/puzzle';
 import { DEFAULT_SIMPLE } from '../../core/symbols';
 import {
@@ -16,19 +17,22 @@ import { LimitPicker } from './LimitPicker';
 import { Field, Segmented } from './Segmented';
 import { SimpleSettingsFields } from './SimpleSettingsFields';
 import { ADD_SUB_PRESETS, MUL_DIV_PRESETS, toggleOp, usesAddSub, usesMulDiv } from './settings';
+import type { PuzzleOutcome } from './usePuzzleResult';
 
 interface Props {
   design: Design;
+  /** The generated puzzle, for the number of blocks. */
+  outcome: PuzzleOutcome;
   update: (updater: (d: Design) => Design) => void;
 }
 
-export function SettingsPanel({ design, update }: Props) {
+export function SettingsPanel({ design, outcome, update }: Props) {
   const setPuzzle = (patch: Partial<PuzzleSettings>) => update((d) => ({ ...d, puzzle: { ...d.puzzle, ...patch } }));
   const setPrint = (patch: Partial<PrintSettings>) => update((d) => ({ ...d, print: { ...d.print, ...patch } }));
   return (
     <section className="panel stack puzzle-settings" aria-label={t('puzzle.settings')}>
       <h2 className="puzzle-h2">{t('puzzle.puzzleTitle')}</h2>
-      <PuzzleOptions design={design} setPuzzle={setPuzzle} />
+      <PuzzleOptions design={design} outcome={outcome} setPuzzle={setPuzzle} />
       <h2 className="puzzle-h2">{t('puzzle.printTitle')}</h2>
       <PrintOptions print={design.print} simple={!!design.puzzle.simple?.on} setPrint={setPrint} />
     </section>
@@ -40,7 +44,7 @@ const OP_GLYPHS: Record<Op, string> = { add: '+', sub: '−', mul: '×', div: '�
 
 type SetPuzzle = (p: Partial<PuzzleSettings>) => void;
 
-function PuzzleOptions({ design, setPuzzle }: { design: Design; setPuzzle: SetPuzzle }) {
+function PuzzleOptions({ design, outcome, setPuzzle }: { design: Design; outcome: PuzzleOutcome; setPuzzle: SetPuzzle }) {
   const p = design.puzzle;
   const simple = p.simple ?? DEFAULT_SIMPLE;
   return (
@@ -84,6 +88,7 @@ function PuzzleOptions({ design, setPuzzle }: { design: Design; setPuzzle: SetPu
         checked={p.blankBackground}
         onChange={(blankBackground) => setPuzzle({ blankBackground })}
       />
+      <BlockOptions design={design} outcome={outcome} simple={simple.on} setPuzzle={setPuzzle} />
       <button
         type="button"
         className="btn big puzzle-dice"
@@ -92,6 +97,50 @@ function PuzzleOptions({ design, setPuzzle }: { design: Design; setPuzzle: SetPu
       >
         <Icon name="dice" /> {t('puzzle.newPuzzle')}
       </button>
+    </>
+  );
+}
+
+/** Joining squares into blocks; the sub-options only show while blocks are on. */
+function BlockOptions({
+  design,
+  outcome,
+  simple,
+  setPuzzle,
+}: {
+  design: Design;
+  outcome: PuzzleOutcome;
+  /** Simple puzzles have no sums to make longer. */
+  simple: boolean;
+  setPuzzle: SetPuzzle;
+}) {
+  const blocks = resolveBlocks(design);
+  // The first change stores all three settings, so a design keeps them when its size changes later.
+  const set = (patch: Partial<BlockSettings>) => setPuzzle({ blocks: { ...blocks, ...patch } });
+  const list = outcome.ok ? outcome.blocks : undefined;
+  const squares = list?.reduce((sum, b) => sum + b.w * b.h, 0) ?? 0;
+  return (
+    <>
+      <Toggle label={t('puzzle.blocks')} title={t('puzzle.blocksTitle')} checked={blocks.on} onChange={(on) => set({ on })} />
+      {blocks.on && (
+        <div className="puzzle-subtoggles">
+          {list && <p className="muted puzzle-block-count">{t('puzzle.blocksCount', { squares, blocks: list.length })}</p>}
+          <Toggle
+            label={t('puzzle.hideOutline')}
+            title={t('puzzle.hideOutlineTitle')}
+            checked={blocks.hideOutline}
+            onChange={(hideOutline) => set({ hideOutline })}
+          />
+          {!simple && (
+            <Toggle
+              label={t('puzzle.harderSums')}
+              title={t('puzzle.harderSumsTitle', { n: HARD_BLOCK_AREA })}
+              checked={blocks.harderSums}
+              onChange={(harderSums) => set({ harderSums })}
+            />
+          )}
+        </div>
+      )}
     </>
   );
 }

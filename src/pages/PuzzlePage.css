@@ -175,6 +175,19 @@
 }
 
 /* Switch-style checkbox; the real input stays focusable for keyboard users. */
+.puzzle-subtoggles {
+  display: flex;
+  flex-direction: column;
+  margin-left: 22px;
+  padding-left: 14px;
+  border-left: 2px solid var(--border, #cbd5e1);
+}
+
+.puzzle-block-count {
+  margin: 0;
+  font-size: 0.9em;
+}
+
 .puzzle-toggle {
   position: relative;
   display: flex;

@@ -29,7 +29,11 @@ export function fnv1a(text: string, basis = 0x811c9dc5): string {
   return h.toString(16).padStart(8, '0');
 }
 
-/** Key that changes whenever the puzzle would change (id + cells + palette ids + puzzle settings hash). */
+/**
+ * Key that changes whenever the puzzle would change (id + cells + palette ids + puzzle settings hash).
+ * Block settings are left out on purpose: blocks only group the squares, every square keeps its colour, so
+ * the colouring done so far stays right (and a big puzzle in progress is not lost when blocks get switched).
+ */
 export function progressKey(d: Design): string {
   const p = d.puzzle;
   const content = [

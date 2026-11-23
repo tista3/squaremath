@@ -1,4 +1,5 @@
 // Pure helpers for the puzzle settings UI (presets, op toggling, quick fixes, sanitising carried settings).
+import { cleanBlocks } from '../../core/blocks';
 import { cleanSimple, symbolCapacity, type SimpleSettings, type SymbolSet } from '../../core/symbols';
 import {
   ADD_SUB_LIMITS,
@@ -106,6 +107,7 @@ function boolOr(value: unknown, fallback: boolean): boolean {
 function sanitizePuzzle(raw: Record<string, unknown>, fallback: PuzzleSettings): PuzzleSettings {
   const ops = Array.isArray(raw.ops) ? ALL_OPS.filter((o) => (raw.ops as unknown[]).includes(o)) : [];
   const simple = cleanSimple(raw.simple) ?? fallback.simple;
+  const blocks = cleanBlocks(raw.blocks) ?? fallback.blocks;
   const seed = typeof raw.seed === 'number' && Number.isFinite(raw.seed) ? raw.seed >>> 0 : fallback.seed;
   return {
     ops: ops.length ? ops : fallback.ops,
@@ -115,6 +117,7 @@ function sanitizePuzzle(raw: Record<string, unknown>, fallback: PuzzleSettings):
     seed,
     blankBackground: boolOr(raw.blankBackground, fallback.blankBackground),
     ...(simple && { simple }),
+    ...(blocks && { blocks }),
   };
 }
 

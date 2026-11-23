@@ -1,3 +1,4 @@
+import type { BlockSettings } from './blocks';
 import type { SimpleSettings } from './symbols';
 
 /**
@@ -9,6 +10,8 @@ import type { SimpleSettings } from './symbols';
  * is black & white: the grid with expressions + the legend (colour name → values/range).
  * In simple mode (PuzzleSettings.simple.on) there is no maths: every cell shows a symbol (number, letter
  * or pictogram) and the legend lists the symbols of each colour. See ./symbols.
+ * With blocks (PuzzleSettings.blocks, see ./blocks) neighbouring cells of one colour are joined into rectangles
+ * that share one expression or symbol, so big pictures have far fewer sums.
  */
 
 export type Op = 'add' | 'sub' | 'mul' | 'div';
@@ -41,6 +44,11 @@ export interface PuzzleSettings {
    * as they were; the maths settings above are ignored while `on`.
    */
   simple?: SimpleSettings;
+  /**
+   * Joining cells into blocks. Absent until the user changes it: then resolveBlocks (./blocks) turns blocks on
+   * for big grids only. Designs, share links and saved progress made before blocks existed stay as they were.
+   */
+  blocks?: BlockSettings;
 }
 
 export type PaperSize = 'A4' | 'Letter';
@@ -90,12 +98,27 @@ export const ADD_SUB_LIMITS = { min: 5, max: 1000 } as const;
 /** Allowed range of PuzzleSettings.mulDivMax (inclusive). */
 export const MUL_DIV_LIMITS = { min: 2, max: 20 } as const;
 
-/** One generated expression: `a op b = result`. Operands/results are non-negative integers. */
+/**
+ * One generated expression: `a op b = result`, or `a op b op2 c = result` (worked left to right; both ops of the
+ * same kind, + − or × ÷, so the order never matters) for a big block with PuzzleSettings.blocks.harderSums.
+ * Operands/results are non-negative integers.
+ */
 export interface Expression {
   a: number;
   b: number;
   op: Op;
   result: number;
+  /** Second step of a three-number expression; `c` and `op2` are both present or both absent. */
+  op2?: Op;
+  c?: number;
+}
+
+/** A rectangle of cells (x, y = top-left column and row) of one colour that shares one expression or symbol. */
+export interface Block {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface LegendEntry {
@@ -128,6 +151,11 @@ export type PuzzleResult =
       expressions: (Expression | null)[];
       /** Simple mode only: the symbol per cell (null = blank); `expressions` are then all null. */
       symbols?: (string | null)[];
+      /**
+       * Only when blocks are on: every non-blank cell lies in exactly one block (1×1 blocks included), in reading
+       * order of their top-left cells. All cells of a block hold the same expression (or symbol).
+       */
+      blocks?: Block[];
       /** One entry per colour actually used in the design, in palette order. Result sets are disjoint. */
       legend: LegendEntry[];
     }

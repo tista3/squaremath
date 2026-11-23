@@ -138,10 +138,12 @@ export function cellIndexes(cells: CellPos[], cols: number, rows: number): numbe
   return cells.filter(({ c, r }) => c >= 0 && r >= 0 && c < cols && r < rows).map(({ c, r }) => r * cols + c);
 }
 
-/** "12 + 7" -> ["12", "+ 7"] so a narrow cell can stack the expression on two lines. */
+/** "12 + 7" -> ["12", "+ 7"] and "12 + 7 − 5" -> ["12 + 7", "− 5"], so a narrow cell can stack the expression on two lines. */
 export function splitLabel(label: string): [string] | [string, string] {
   const parts = label.split(' ');
-  return parts.length === 3 ? [parts[0], `${parts[1]} ${parts[2]}`] : [label];
+  if (parts.length === 3) return [parts[0], `${parts[1]} ${parts[2]}`];
+  if (parts.length === 5) return [parts.slice(0, 3).join(' '), `${parts[3]} ${parts[4]}`];
+  return [label];
 }
 
 /** Share of a cell's width (and height) labels may use; the rest keeps text off the grid lines. */
@@ -162,9 +164,18 @@ export interface LabelLayout {
 }
 
 export function labelLayout(m: LabelMetrics, cellPx: number): LabelLayout {
-  const avail = cellPx * LABEL_FILL;
-  const single = Math.min(avail / m.single, cellPx * 0.4);
+  return labelLayoutBox(m, cellPx, cellPx);
+}
+
+/** Text in a block grows at most to this many times the text of a single cell. */
+export const BLOCK_LABEL_GAIN = 1.25;
+
+/** labelLayout for a box of w × h px (a block of cells), with the font size capped at `maxFontPx`. */
+export function labelLayoutBox(m: LabelMetrics, w: number, h: number, maxFontPx = Infinity): LabelLayout {
+  const availW = w * LABEL_FILL;
+  const availH = h * LABEL_FILL;
+  const single = Math.min(availW / m.single, h * 0.4, maxFontPx);
   // Two lines at ±0.56em take about 2.2em of height.
-  const stacked = Math.min(avail / m.stacked, avail / 2.3);
+  const stacked = Math.min(availW / m.stacked, availH / 2.3, maxFontPx);
   return stacked > single * STACK_GAIN ? { stacked: true, fontPx: stacked } : { stacked: false, fontPx: single };
 }

@@ -1,4 +1,5 @@
 // OWNER: core-data agent. Design construction, validation & editing helpers (all pure, return new objects).
+import { cleanBlocks } from './blocks';
 import { nearestColorName, normalizeHex } from './colors';
 import { randomSeed } from './puzzle';
 import { cleanSimple } from './symbols';
@@ -184,6 +185,7 @@ function normalizePuzzle(raw: unknown): PuzzleSettings {
   const p = isRecord(raw) ? raw : {};
   const seed = field(p, 'seed');
   const simple = cleanSimple(field(p, 'simple'));
+  const blocks = cleanBlocks(field(p, 'blocks'));
   return {
     ops: normalizeOps(field(p, 'ops')),
     addSubMax: clampInt(field(p, 'addSubMax'), ADD_SUB_LIMITS.min, ADD_SUB_LIMITS.max, DEFAULT_PUZZLE.addSubMax),
@@ -192,6 +194,7 @@ function normalizePuzzle(raw: unknown): PuzzleSettings {
     seed: typeof seed === 'number' && Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : DEFAULT_PUZZLE.seed,
     blankBackground: bool(field(p, 'blankBackground'), DEFAULT_PUZZLE.blankBackground),
     ...(simple && { simple }),
+    ...(blocks && { blocks }),
   };
 }
 
@@ -322,7 +325,12 @@ export function cloneDesign(d: Design, overrides?: Partial<Pick<Design, 'name'>>
     name: cleanName(overrides?.name) || d.name,
     palette: d.palette.map((c) => ({ ...c })),
     cells: [...d.cells],
-    puzzle: { ...d.puzzle, ops: [...d.puzzle.ops], ...(d.puzzle.simple && { simple: { ...d.puzzle.simple } }) },
+    puzzle: {
+      ...d.puzzle,
+      ops: [...d.puzzle.ops],
+      ...(d.puzzle.simple && { simple: { ...d.puzzle.simple } }),
+      ...(d.puzzle.blocks && { blocks: { ...d.puzzle.blocks } }),
+    },
     print: { ...d.print },
     createdAt: now,
     updatedAt: now,

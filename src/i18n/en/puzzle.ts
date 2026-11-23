@@ -27,6 +27,15 @@ const dict: Record<string, string> = {
   legendRangeTitle: 'Each colour covers a range of answers',
   legendValue: 'Exact numbers',
   legendValueTitle: 'Each colour lists its exact answers',
+  blocks: 'Join squares into blocks',
+  blocksTitle:
+    'Squares of the same colour that touch share one sum (or symbol), so a big picture has far fewer to work out. Press the dice for other blocks.',
+  blocksCount: '{squares} squares in {blocks} blocks',
+  hideOutline: 'Hide the outline',
+  hideOutlineTitle:
+    'Mix big and small blocks everywhere, so the block edges do not give the picture away. There are more blocks to work out.',
+  harderSums: 'Longer sums in big blocks',
+  harderSumsTitle: 'Blocks of {n} or more squares get a sum with three numbers, like 12 + 7 − 5.',
   newPuzzle: 'New puzzle',
   newPuzzleTitle: 'Same picture, new sums',
   newSimpleTitle: 'Same picture, different symbols for the colours',
